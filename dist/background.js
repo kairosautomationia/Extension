@@ -61,7 +61,29 @@ function agruparActiva() {
 }
 
 // El panel avisa cuando se abre (conectando un puerto); se espera un instante para leer la pestaña activa ya estable.
+let panelesAbiertos = 0;
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'hanzo-panel') return;
+  panelesAbiertos++;
   setTimeout(agruparActiva, 250);
+  // Al cerrar el panel, el grupo "Hanzo" se deshace (las pestañas se quedan abiertas)
+  port.onDisconnect.addListener(() => {
+    panelesAbiertos = Math.max(0, panelesAbiertos - 1);
+    if (panelesAbiertos === 0) setTimeout(desagrupar, 150);
+  });
 });
+
+async function desagrupar() {
+  if (!AGRUPAR_PESTANA || !chrome.tabGroups || panelesAbiertos > 0) return;
+  try {
+    if (agrupando) await agrupando;
+    const grupos = await chrome.tabGroups.query({ title: NOMBRE_GRUPO });
+    for (const g of grupos) {
+      const tabs = await chrome.tabs.query({ groupId: g.id });
+      const ids = tabs.map((t) => t.id).filter((x) => x !== undefined);
+      if (ids.length) await chrome.tabs.ungroup(ids);
+    }
+  } catch {
+    /* si Chrome lo rechaza (p. ej. arrastrando una pestaña) se deja el grupo como está */
+  }
+}
