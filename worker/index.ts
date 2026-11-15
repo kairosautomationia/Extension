@@ -73,7 +73,14 @@ export default {
     ];
 
     try {
-      const stream = await env.AI.run(MODEL, { messages, stream: true, max_tokens: 1200 });
+      const stream = await env.AI.run(MODEL, {
+        messages,
+        stream: true,
+        max_tokens: 1200,
+        temperature: 0.3,
+        // Sin razonamiento largo: respuestas rápidas para un panel de chat.
+        chat_template_kwargs: { enable_thinking: false },
+      });
       return new Response(stream as ReadableStream, {
         headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', ...CORS },
       });

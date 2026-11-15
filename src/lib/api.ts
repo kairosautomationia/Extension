@@ -1,6 +1,6 @@
-// URL base del Worker. Vacía = mismo origen (vista web desplegada en Cloudflare).
-// Para la extensión de Chrome define VITE_API_URL=https://<tu-worker>.workers.dev al compilar.
-const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '');
+// URL del Worker de Hanzo en Cloudflare. Se puede sobreescribir con VITE_API_URL al compilar.
+const DEFAULT_API = 'https://extension.kairosautomation-ia.workers.dev';
+const BASE = (((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API)).replace(/\/$/, '');
 
 export interface ApiMessage {
   role: 'user' | 'assistant';
@@ -34,10 +34,6 @@ export async function streamAgent(
   onToken: (t: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const inExtension = typeof location !== 'undefined' && location.protocol === 'chrome-extension:';
-  if (inExtension && !BASE) {
-    throw new Error('falta VITE_API_URL (URL del Worker) al compilar la extensión');
-  }
   const res = await fetch(`${BASE}/api/agent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
