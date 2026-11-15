@@ -22,9 +22,10 @@ export interface Snapshot {
   scrollMax: number;
 }
 export interface ActAction {
-  type: 'click' | 'type' | 'scroll' | 'done' | 'ask';
+  type: 'click' | 'type' | 'scroll' | 'open' | 'done' | 'ask';
   id?: number;
   text?: string;
+  url?: string;
   dir?: 'down' | 'up';
 }
 export interface ActPlan {
@@ -55,6 +56,7 @@ export function describeAction(a: ActAction, el?: PageEl): string {
   const name = el ? `«${el.label || el.kind}»` : 'un elemento';
   if (a.type === 'click') return `hacer clic en ${name}`;
   if (a.type === 'type') return `escribir «${(a.text ?? '').slice(0, 80)}» en ${name}`;
+  if (a.type === 'open') return `abrir ${(a.url ?? '').slice(0, 80)}`;
   if (a.type === 'scroll') return a.dir === 'up' ? 'desplazar la página hacia arriba' : 'desplazar la página hacia abajo';
   return 'terminar';
 }
@@ -73,6 +75,17 @@ export async function tabState(tabId?: number): Promise<TabState | null> {
     const tab = tabId === undefined ? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0] : await chrome.tabs.get(tabId);
     if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) return null;
     return { id: tab.id, url: tab.url, title: tab.title ?? '', host: new URL(tab.url).hostname };
+  } catch {
+    return null;
+  }
+}
+
+/** Id de la pestaña activa aunque no sea una página web (nueva pestaña, chrome://…). */
+export async function activeTabId(): Promise<number | null> {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.tabs?.query) return null;
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return tab?.id ?? null;
   } catch {
     return null;
   }

@@ -182,10 +182,11 @@ const json = (data: unknown, status = 200) =>
 // ---------- Acciones sobre la página (/api/act): el modelo propone UNA acción por turno ----------
 const ACT_SYSTEM = `Eres Hanzo y controlas la pestaña activa del usuario para cumplir UNA tarea.
 Respondes SOLO con un objeto JSON, sin texto extra ni bloques de código:
-{"say":"frase corta en español","action":{"type":"click|type|scroll|done|ask","id":0,"text":"","dir":"down|up"}}
+{"say":"frase corta en español","action":{"type":"click|type|scroll|open|done|ask","id":0,"text":"","dir":"down|up","url":""}}
 Reglas:
 - Das UNA sola acción por turno.
 - click: "id" del elemento. type: "id" del campo y "text" con el texto completo (reemplaza el contenido). scroll: "dir" down o up para ver más elementos.
+- open: abre en esta pestaña una dirección web "url" (https). Úsalo cuando la pestaña es nueva o interna (no hay elementos) o cuando la tarea pide ir a otro sitio. Usa la dirección oficial del sitio (p. ej. https://www.youtube.com, https://mail.google.com) o, si no la sabes, una búsqueda https://www.google.com/search?q=términos. Con una pestaña nueva o interna tu primera acción debe ser open. Si el usuario pide abrir un programa de escritorio (no una web), responde ask explicando que Hanzo solo trabaja con páginas web.
 - done: la tarea ya está cumplida o no se puede cumplir; en "say" explica el resultado en 1-2 frases.
 - ask: falta un dato que el usuario no dio (no lo inventes); en "say" pídelo.
 - Usa solo ids de la lista. Nunca inventes datos personales, claves ni números de tarjeta.
@@ -207,8 +208,8 @@ interface ActBody {
   history?: string[];
   scroll?: { y?: number; max?: number };
 }
-type ActType = 'click' | 'type' | 'scroll' | 'done' | 'ask';
-const ACT_TYPES: ActType[] = ['click', 'type', 'scroll', 'done', 'ask'];
+type ActType = 'click' | 'type' | 'scroll' | 'open' | 'done' | 'ask';
+const ACT_TYPES: ActType[] = ['click', 'type', 'scroll', 'open', 'done', 'ask'];
 
 function extractJson(text: string): Record<string, unknown> | null {
   const a = text.indexOf('{');
@@ -223,7 +224,7 @@ function extractJson(text: string): Record<string, unknown> | null {
 }
 
 /** Valida lo que dijo el modelo: nunca se confía en él para elegir ids o tipos. */
-function validateAct(raw: Record<string, unknown> | null, els: ActEl[]): { say: string; action: { type: ActType; id?: number; text?: string; dir?: 'down' | 'up' } } {
+function validateAct(raw: Record<string, unknown> | null, els: ActEl[]): { say: string; action: { type: ActType; id?: number; text?: string; dir?: 'down' | 'up'; url?: string } } {
   const say = typeof raw?.say === 'string' ? raw.say.slice(0, 400) : '';
   const act = (raw?.action && typeof raw.action === 'object' ? raw.action : {}) as Record<string, unknown>;
   const type = ACT_TYPES.includes(act.type as ActType) ? (act.type as ActType) : null;
@@ -231,6 +232,15 @@ function validateAct(raw: Record<string, unknown> | null, els: ActEl[]): { say: 
   if (!type) return fail('No pude decidir una acción segura.');
   if (type === 'done' || type === 'ask') return { say: say || (type === 'done' ? 'Listo.' : 'Necesito más datos.'), action: { type } };
   if (type === 'scroll') return { say, action: { type, dir: act.dir === 'up' ? 'up' : 'down' } };
+  if (type === 'open') {
+    try {
+      const u = new URL(String(act.url ?? ''));
+      if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.href.length > 300) throw new Error('url');
+      return { say, action: { type, url: u.href } };
+    } catch {
+      return fail('No pude decidir una dirección web segura.');
+    }
+  }
   const id = typeof act.id === 'number' ? act.id : NaN;
   const el = els.find((e) => e.id === id);
   if (!el) return fail('No encontré ese elemento en la página.');
@@ -265,7 +275,7 @@ async function handleAct(request: Request, env: Env): Promise<Response> {
     .join('\n');
   const user = `Tarea del usuario: ${task}
 
-Pestaña: ${String(b.page?.title ?? '').slice(0, 120)} (${String(b.page?.url ?? '').slice(0, 200)})
+Pestaña: ${b.page?.url ? `${String(b.page?.title ?? '').slice(0, 120)} (${String(b.page.url).slice(0, 200)})` : 'nueva o interna (sin página web: usa open)'}
 Posición de scroll: ${Number(b.scroll?.y ?? 0)} de ${Number(b.scroll?.max ?? 0)}
 
 Elementos visibles ahora:

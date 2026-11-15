@@ -6,6 +6,7 @@ import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
 import {
   MAX_STEPS,
   type ActPlan,
+  activeTabId,
   describeAction,
   inTab,
   injectedAct,
@@ -116,13 +117,16 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
         }
         setStep(0, 'running');
         const tab0 = await tabState();
+        // Pestaña nueva o interna (chrome://…): no se puede leer, pero sí abrir una web en ella
+        const tabId = tab0?.id ?? (await activeTabId());
         check();
-        if (!tab0) {
+        if (tabId === null) {
           setStep(0, 'skipped');
-          finishTask('No puedo actuar en esta pestaña. Abre una página web normal (http o https).');
+          finishTask('No encuentro una pestaña donde actuar. Abre una pestaña del navegador e inténtalo de nuevo.');
           return;
         }
-        if (isBlockedHost(tab0.host)) {
+        let baseHost = tab0?.host ?? '';
+        if (tab0 && isBlockedHost(tab0.host)) {
           setStep(0, 'skipped');
           finishTask(`Por seguridad, Hanzo no actúa en **${tab0.host}** (banca y pagos).`);
           return;
@@ -149,17 +153,19 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
               final = 'Cambiaste a Solo lectura; me detuve.';
               break;
             }
-            const cur = await tabState(tab0.id);
+            const cur = await tabState(tabId);
             check();
-            if (!cur) {
-              final = 'La pestaña ya no está disponible; me detuve.';
-              break;
-            }
-            if (cur.host !== tab0.host) {
+            if (cur && baseHost && cur.host !== baseHost) {
               final = `La pestaña cambió a **${cur.host}**. Por seguridad me detuve; vuelve a pedirme la tarea desde ahí.`;
               break;
             }
-            const snap = await inTab(tab0.id, injectedSnapshot, []);
+            if (cur && !baseHost) baseHost = cur.host;
+            if (!cur && baseHost) {
+              final = 'La pestaña ya no es una página web; me detuve.';
+              break;
+            }
+            // Sin página web (pestaña nueva): no hay elementos y lo único posible es abrir una dirección
+            const snap = cur ? await inTab(tabId, injectedSnapshot, []) : { els: [], scrollY: 0, scrollMax: 0 };
             check();
             if (!snap) {
               final = 'No pude leer la página.';
@@ -173,7 +179,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
               plan = await requestAct(
                 {
                   task,
-                  page: { title: cur.title, url: cur.url },
+                  page: { title: cur?.title ?? '', url: cur?.url ?? '' },
                   elements: snap.els,
                   history,
                   scroll: { y: snap.scrollY, max: snap.scrollMax },
@@ -191,6 +197,68 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
             const a = plan.action;
             if (a.type === 'done' || a.type === 'ask') {
               final = plan.say || (a.type === 'done' ? 'Listo.' : 'Necesito más datos.');
+              break;
+            }
+            if (a.type === 'open') {
+              let target: URL | null = null;
+              try {
+                target = a.url ? new URL(a.url) : null;
+              } catch {
+                target = null;
+              }
+              if (!target || (target.protocol !== 'https:' && target.protocol !== 'http:')) {
+                history.push('Acción inválida: dirección no permitida');
+                if (++bad >= 3) {
+                  final = 'No logré decidir una dirección segura. Prueba con una tarea más concreta.';
+                  break;
+                }
+                continue;
+              }
+              const odesc = describeAction(a);
+              if (isBlockedHost(target.hostname)) {
+                addStep(`open("${target.hostname}")`, `Bloqueado: ${odesc}`, 'skipped');
+                history.push(`BLOQUEADO: ${target.hostname} es banca o pagos; Hanzo no actúa ahí`);
+                if (++bad >= 3) {
+                  final = `Por seguridad, Hanzo no abre ni actúa en **${target.hostname}** (banca y pagos).`;
+                  break;
+                }
+                continue;
+              }
+              bad = 0;
+              const oi = addStep(`open("${target.hostname}")`, odesc.charAt(0).toUpperCase() + odesc.slice(1), 'running');
+              // Cambiar de sitio siempre pide tu aprobación, en cualquier modo
+              patch(id, (m) => ({ ...m, approval: { action: odesc, state: 'pending' } }));
+              const okOpen = await new Promise<boolean>((resolve) => {
+                approvalRef.current = resolve;
+              });
+              approvalRef.current = null;
+              check();
+              patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: okOpen ? 'approved' : 'rejected' } }));
+              if (!okOpen) {
+                setStep(oi, 'skipped');
+                final = 'Rechazaste abrir esa página; detuve la tarea.';
+                break;
+              }
+              await chrome.tabs.update(tabId, { url: target.href });
+              await waitReady(tabId);
+              check();
+              const now = await tabState(tabId);
+              setStep(oi, now ? 'done' : 'skipped');
+              if (!now) {
+                final = 'No pude abrir esa página.';
+                break;
+              }
+              if (isBlockedHost(now.host)) {
+                final = `Por seguridad, Hanzo no actúa en **${now.host}** (banca y pagos).`;
+                break;
+              }
+              baseHost = now.host; // abrir fue una decisión aprobada: el sitio nuevo pasa a ser la base
+              history.push(`Abrí ${now.host}`);
+              await sleep(600);
+              continue;
+            }
+            if (!cur) {
+              final = 'Esta pestaña no es una página web; primero hay que abrir una dirección.';
               break;
             }
             const el = a.id !== undefined ? snap.els.find((e) => e.id === a.id) : undefined;
@@ -219,7 +287,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
             const high = el?.risk === 'high';
             const needsApproval = getMode() === 'manual' || high;
 
-            await inTab(tab0.id, injectedHighlight, [el ? el.id : null, desc]);
+            await inTab(tabId, injectedHighlight, [el ? el.id : null, desc]);
             if (needsApproval) {
               patch(id, (m) => ({
                 ...m,
@@ -240,14 +308,14 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
               await sleep(600); // el usuario alcanza a ver qué se va a tocar
             }
 
-            const res = await inTab(tab0.id, injectedAct, [a]);
+            const res = await inTab(tabId, injectedAct, [a]);
             check();
             setStep(si, res?.ok ? 'done' : 'skipped');
             history.push(`${desc} → ${res?.ok ? 'OK' : `FALLÓ: ${res?.msg ?? 'sin respuesta'}`}`);
             await sleep(900); // deja que la página reaccione
           }
         } finally {
-          inTab(tab0.id, injectedClear, []).catch(() => {});
+          inTab(tabId, injectedClear, []).catch(() => {});
         }
         finishTask(final);
       };
@@ -381,8 +449,24 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
           final = 'Estás en modo **Solo lectura**. Cambia a Manual o Automático para que pueda actuar en la página.';
           return;
         }
-        const t0 = await tabState();
+        let t0 = await tabState();
         check();
+        // Pestaña nueva o interna: si el flujo tiene página de inicio, se abre con tu aprobación
+        const startFirst = onlyId ? undefined : flow.startUrl;
+        if (!t0 && startFirst && /^https?:/.test(startFirst) && !isBlockedHost(hostOf(startFirst))) {
+          const aid = await activeTabId();
+          check();
+          if (aid !== null) {
+            if (!(await ask(`abrir ${startFirst} para empezar el flujo`))) {
+              final = 'No abrí la página de inicio; detuve la repetición.';
+              return;
+            }
+            await chrome.tabs.update(aid, { url: startFirst });
+            await waitReady(aid);
+            check();
+            t0 = await tabState(aid);
+          }
+        }
         if (!t0) {
           final = 'No puedo actuar en esta pestaña. Abre una página web normal (http o https).';
           return;
