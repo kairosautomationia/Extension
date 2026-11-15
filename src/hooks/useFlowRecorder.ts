@@ -57,7 +57,7 @@ export function useFlowRecorder(tab: TabInfo) {
       // Simulación para la vista previa
       let i = 0;
       const t = setInterval(() => {
-        push({ ...DEV_SAMPLE[i % DEV_SAMPLE.length], url: 'https://www.amazon.com/', t: Date.now() });
+        push({ ...DEV_SAMPLE[i % DEV_SAMPLE.length], url: 'https://ejemplo.com/', t: Date.now() });
         i++;
       }, 1500);
       cleanupRef.current = () => clearInterval(t);

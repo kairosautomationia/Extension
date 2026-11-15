@@ -33,6 +33,9 @@ export default function HistoryDrawer({ open, onClose }: { open: boolean; onClos
               </button>
             </div>
             <ul className="thin-scroll flex-1 overflow-y-auto p-2">
+              {HISTORY.length === 0 && (
+                <li className="px-3 py-6 text-center text-[13px] text-mute">Aún no hay conversaciones guardadas.</li>
+              )}
               {HISTORY.map((c) => (
                 <li key={c.id}>
                   <button
