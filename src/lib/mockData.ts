@@ -15,7 +15,7 @@ export const SUGGESTIONS = [
 export const SHORTCUTS = [
   { id: 's1', title: 'Resumir y extraer puntos clave', prompt: 'Resume esta página en 5 puntos clave' },
   { id: 's2', title: 'Comparar precios del carrito', prompt: 'Compara los precios de los productos del carrito' },
-  { id: 's3', title: 'Completar checkout', prompt: 'Completa el checkout con mis datos guardados' },
+  { id: 's3', title: 'Redactar respuesta a lo que veo', prompt: 'Redacta una respuesta corta y directa al mensaje o correo que veo en esta página' },
 ];
 
 export const HISTORY: Conversation[] = [
