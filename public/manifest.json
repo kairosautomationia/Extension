@@ -3,7 +3,7 @@
   "name": "Hanzo",
   "version": "0.1.0",
   "description": "Hanzo: tu agente de IA en el panel lateral de Chrome.",
-  "permissions": ["sidePanel", "tabs", "activeTab", "scripting"],
+  "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "sidepanel.html" },
