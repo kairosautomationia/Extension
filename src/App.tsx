@@ -5,7 +5,6 @@ import { useAgent } from './hooks/useAgent';
 import { useFlowRecorder } from './hooks/useFlowRecorder';
 import Header from './components/Header';
 import HistoryDrawer from './components/HistoryDrawer';
-import RecordingsDrawer from './components/RecordingsDrawer';
 import ChatStream from './components/ChatStream';
 import PromptBox from './components/PromptBox';
 import { saveChat, type StoredChat } from './lib/history';
@@ -29,18 +28,12 @@ export default function App() {
     }
   };
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [recOpen, setRecOpen] = useState(false);
   const [seed, setSeed] = useState({ text: '', n: 0 });
   const tab = useActiveTab();
   const [captureN, setCaptureN] = useState(0);
   const onCapture = useCallback(() => setCaptureN((n) => n + 1), []);
   const agent = useAgent(mode, { onCapture });
   const rec = useFlowRecorder(tab);
-
-  // Al terminar una grabación, el panel de grabaciones se abre solo para mostrar dónde quedó
-  useEffect(() => {
-    if (rec.savedKey > 0) setRecOpen(true);
-  }, [rec.savedKey]);
 
   // Historial: cada conversación se guarda sola al terminar cada respuesta.
   const [chatId, setChatId] = useState(() => Math.random().toString(36).slice(2, 10));
@@ -68,9 +61,13 @@ export default function App() {
         onOpenHistory={() => setHistoryOpen(true)}
         onNewChat={newChat}
         onRunShortcut={(p) => agent.send(p)}
-        onOpenRecordings={() => setRecOpen(true)}
-        recCount={rec.flows.length}
-        recording={rec.recording}
+        onReplay={agent.replay}
+        busy={agent.running}
+        flows={rec.flows}
+        savedKey={rec.savedKey}
+        onDeleteFlow={rec.removeFlow}
+        onRenameFlow={rec.renameFlow}
+        onClearFlows={rec.clearFlows}
       />
 
       <main className="thin-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
@@ -96,17 +93,6 @@ export default function App() {
         onToggleRecord={rec.toggle}
         captureSignal={captureN}
         onCaptured={rec.addCapture}
-      />
-
-      <RecordingsDrawer
-        open={recOpen}
-        onClose={() => setRecOpen(false)}
-        flows={rec.flows}
-        busy={agent.running}
-        onReplay={agent.replay}
-        onRename={rec.renameFlow}
-        onDelete={rec.removeFlow}
-        onClearAll={rec.clearFlows}
       />
 
       <HistoryDrawer
