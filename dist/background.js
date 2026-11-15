@@ -1,12 +1,15 @@
 // Abre el side panel al pulsar el icono de la extensión.
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((e) => console.error(e));
+    .catch(() => {});
 
 // Opción "Hanzo" en el menú de clic derecho (Chrome le pone el icono de la extensión).
 function crearMenu() {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'hanzo-abrir', title: 'Hanzo', contexts: ['all'] });
+    void chrome.runtime.lastError;
+    chrome.contextMenus.create({ id: 'hanzo-abrir', title: 'Hanzo', contexts: ['all'] }, () => {
+      void chrome.runtime.lastError; // si otro aviso ya lo creó, se ignora (evita error "duplicate id")
+    });
   });
 }
 chrome.runtime.onInstalled.addListener(crearMenu);
@@ -14,7 +17,7 @@ chrome.runtime.onStartup.addListener(crearMenu);
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== 'hanzo-abrir' || !tab || tab.windowId === undefined) return;
-  chrome.sidePanel.open({ windowId: tab.windowId }).catch((e) => console.error(e));
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
 });
 
 // "Preguntar a Hanzo" (burbuja al seleccionar texto): abre el panel y le deja el texto al panel.
@@ -23,8 +26,8 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   const text = String(msg.text || '').slice(0, 1000);
   if (!text) return;
   // Primero abrir el panel (necesita venir de un gesto del usuario), luego guardar el texto
-  chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch((e) => console.error(e));
-  chrome.storage.session.set({ hanzoPending: { text, t: Date.now() } });
+  chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => {});
+  chrome.storage.session.set({ hanzoPending: { text, t: Date.now() } }).catch(() => {});
 });
 
 // Grupo de pestañas "Hanzo": al abrir el panel, la pestaña activa se mete en un grupo con ese nombre,
@@ -50,7 +53,7 @@ function agruparActiva() {
     const groupId = await chrome.tabs.group({ tabIds: [tab.id], createProperties: { windowId: tab.windowId } });
     await chrome.tabGroups.update(groupId, { title: NOMBRE_GRUPO, color: 'blue', collapsed: false });
   })()
-    .catch((e) => console.error('Hanzo: no se pudo agrupar la pestaña', e))
+    .catch(() => {}) // agrupar es opcional: si Chrome lo rechaza (pestaña arrastrándose, etc.) no se registra como error
     .finally(() => {
       agrupando = null;
     });
