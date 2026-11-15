@@ -72,7 +72,7 @@ export default function EmptyState({ tab, onPick }: { tab: TabInfo; onPick: (t: 
         </m.p>
         <m.h1
           variants={{ hide: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
-          className="mt-1.5 font-serif text-[34px] leading-[1.1] tracking-tight"
+          className="mt-1.5 w-full whitespace-nowrap font-serif text-[clamp(21px,7.4vw,30px)] leading-[1.15] tracking-tight"
         >
           ¿Por dónde empezamos?
         </m.h1>
