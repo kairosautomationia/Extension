@@ -40,6 +40,12 @@ export function parseTask(t: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+/** Separa el comando del resto: "/hacer abre X" → { head:'', cmd:'/hacer', rest:' abre X' }. */
+export function splitCommand(t: string): { head: string; cmd: string; rest: string } | null {
+  const m = t.match(/^(\s*)(\/(?:hacer|accion|acci[oó]n))(?=\s|$)([\s\S]*)$/i);
+  return m ? { head: m[1], cmd: m[2], rest: m[3] } : null;
+}
+
 /** Sitios donde Hanzo nunca actúa (banca y pagos). */
 export function isBlockedHost(host: string): boolean {
   return /(bank|banco|paypal|stripe|binance|coinbase|wise\.com|pichincha|produbanco|bolivariano|payphone|datafast|kushki|(^|\.)pay\.|checkout)/i.test(host);

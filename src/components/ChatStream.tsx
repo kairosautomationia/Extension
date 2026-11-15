@@ -5,6 +5,7 @@ import type { AgentMessage, Message, TabInfo, UserMessage } from '../types';
 import EmptyState from './EmptyState';
 import PlanAccordion from './PlanAccordion';
 import ApprovalCard from './ApprovalCard';
+import { splitCommand } from '../lib/actions';
 
 const inline = (s: string): ReactNode[] =>
   s.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((p, i) =>
@@ -32,6 +33,7 @@ function Prose({ text, streaming }: { text: string; streaming?: boolean }) {
 }
 
 const UserBubble = memo(function UserBubble({ m }: { m: UserMessage }) {
+  const cmd = splitCommand(m.text);
   return (
     <div className="flex flex-col items-end gap-1.5">
       {m.attachments.length > 0 && (
@@ -48,7 +50,15 @@ const UserBubble = memo(function UserBubble({ m }: { m: UserMessage }) {
         </div>
       )}
       <div className="max-w-[88%] whitespace-pre-wrap break-words rounded-[16px] bg-bubble px-3.5 py-2.5 text-sm leading-relaxed">
-        {m.text}
+        {cmd ? (
+          <>
+            {cmd.head}
+            <span className="rounded bg-blue-500/15 px-1 font-medium text-blue-600 dark:text-blue-400">{cmd.cmd}</span>
+            {cmd.rest}
+          </>
+        ) : (
+          m.text
+        )}
       </div>
     </div>
   );
@@ -102,7 +112,7 @@ const AgentBlock = memo(function AgentBlock({
               {copied ? <Check size={13} className="text-accent-ink" /> : <Copy size={13} />}
               {copied ? 'Copiado' : 'Copiar'}
             </button>
-            {!!msg.plan && !msg.plan.steps.every((s) => s.state === 'skipped') && (
+            {!!msg.plan && !msg.replay && !msg.plan.steps.every((s) => s.state === 'skipped') && (
               <button onClick={() => setSaved(true)} disabled={saved} className={action}>
                 {saved ? <Check size={13} className="text-accent-ink" /> : <BookmarkPlus size={13} />}
                 {saved ? 'Atajo guardado' : 'Guardar como atajo'}

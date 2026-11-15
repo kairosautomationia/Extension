@@ -151,3 +151,9 @@ button:not(:disabled):active {
     animation: breathe 1.6s ease-in-out infinite;
   }
 }
+
+/* Cuadro con comando resaltado: la selección deja ver el texto dibujado debajo */
+.mirror-ta::selection {
+  background: rgb(var(--accent) / 0.28);
+  color: transparent;
+}

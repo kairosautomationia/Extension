@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PermissionMode } from './types';
 import { useActiveTab } from './hooks/useActiveTab';
 import { useAgent } from './hooks/useAgent';
@@ -30,7 +30,9 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [seed, setSeed] = useState({ text: '', n: 0 });
   const tab = useActiveTab();
-  const agent = useAgent(mode);
+  const [captureN, setCaptureN] = useState(0);
+  const onCapture = useCallback(() => setCaptureN((n) => n + 1), []);
+  const agent = useAgent(mode, { onCapture });
   const rec = useFlowRecorder(tab);
 
   // Historial: cada conversación se guarda sola al terminar cada respuesta.
@@ -59,6 +61,8 @@ export default function App() {
         onOpenHistory={() => setHistoryOpen(true)}
         onNewChat={newChat}
         onRunShortcut={(p) => agent.send(p)}
+        onReplay={agent.replay}
+        busy={agent.running}
         flows={rec.flows}
         savedKey={rec.savedKey}
         onDeleteFlow={rec.removeFlow}
@@ -85,6 +89,8 @@ export default function App() {
         recActions={rec.actions}
         recError={rec.error}
         onToggleRecord={rec.toggle}
+        captureSignal={captureN}
+        onCaptured={rec.addCapture}
       />
 
       <HistoryDrawer

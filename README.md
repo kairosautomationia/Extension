@@ -60,3 +60,13 @@ Límites de seguridad:
 - Solo la pestaña activa; si cambia de sitio, se detiene. Máximo 12 pasos por tarea y botón Detener.
 - El texto de la página se trata como dato, nunca como instrucciones. El Worker valida cada acción del modelo (ids, tipos, longitudes).
 - La acción se resalta con un recuadro naranja en la página antes de ejecutarse.
+
+### Comando como habilidad
+Al escribir `/` en el chat aparece la habilidad **/hacer** (Enter o Tab la inserta) y queda resaltada en azul en el cuadro de texto y en el mensaje enviado.
+
+## Grabar y repetir acciones
+1. Pulsa **Grabar** en la barra del chat y usa la página: se anotan clics, escritura, listas, casillas, Enter, desplazamientos y capturas de pantalla.
+2. Al **Detener**, el flujo queda guardado en la etiqueta de la esquina superior derecha.
+3. Allí, el botón ▶ repite todo el flujo en la página; tocar una acción repite solo esa.
+
+Seguridad al repetir: los datos de contraseña, tarjeta o identidad nunca se guardan ni se rellenan (te pide que los completes tú); enviar, pagar, borrar o confirmar siempre pide aprobación; no actúa en banca y pagos; se detiene si la página cambia de sitio o no encuentra el elemento; solo cambia de sitio con tu aprobación. Un botón **Detener** corta la repetición en cualquier momento.

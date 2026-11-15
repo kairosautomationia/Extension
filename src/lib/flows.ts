@@ -10,6 +10,12 @@ export function describeAction(a: RecordedAction): string {
       return `Elegir "${a.value ?? ''}" en "${a.label}"`;
     case 'submit':
       return 'Enviar formulario';
+    case 'key':
+      return `Pulsar ${a.value ?? 'Enter'}${a.label ? ` en "${a.label}"` : ''}`;
+    case 'scroll':
+      return 'Desplazar la página';
+    case 'capture':
+      return 'Captura de pantalla';
     case 'navigate':
       try {
         const u = new URL(a.url);

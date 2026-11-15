@@ -25,6 +25,8 @@ interface Props {
   onOpenHistory: () => void;
   onNewChat: () => void;
   onRunShortcut: (prompt: string) => void;
+  onReplay: (flow: SavedFlow, actionId?: string) => void;
+  busy: boolean;
   flows: SavedFlow[];
   savedKey: number;
   onDeleteFlow: (id: string) => void;
@@ -33,7 +35,7 @@ interface Props {
 const iconBtn =
   'grid h-8 w-8 place-items-center rounded-lg text-mute transition-colors hover:bg-bubble hover:text-ink';
 
-export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onRunShortcut, flows, savedKey, onDeleteFlow }: Props) {
+export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onRunShortcut, onReplay, busy, flows, savedKey, onDeleteFlow }: Props) {
   const [modeOpen, setModeOpen] = useState(false);
   const [shortOpen, setShortOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement>(null);
@@ -143,9 +145,10 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
                 <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-mute">Acciones grabadas</p>
                 <FlowList
                   flows={flows}
-                  onRun={(p) => {
+                  busy={busy}
+                  onReplay={(f, actionId) => {
                     setShortOpen(false);
-                    onRunShortcut(p);
+                    onReplay(f, actionId);
                   }}
                   onDelete={onDeleteFlow}
                 />

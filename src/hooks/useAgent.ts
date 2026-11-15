@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AgentMessage, Attachment, Message, PermissionMode, PlanStep } from '../types';
+import type { AgentMessage, Attachment, Message, PermissionMode, PlanStep, SavedFlow } from '../types';
+import { describeAction as describeRecorded } from '../lib/flows';
+import { hostOf, injectedFind, injectedReplayAct, injectedScrollTo, sameUrl, waitReady, type FindRes } from '../lib/replay';
 import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
 import {
   MAX_STEPS,
@@ -32,7 +34,7 @@ const READ_STEPS: Omit<PlanStep, 'id' | 'state'>[] = [
  * - "/hacer <tarea>": bucle de acciones (clic, escribir, desplazar) en la pestaña activa, de a UNA acción,
  *   con aprobación según el modo, campos sensibles bloqueados, tope de pasos y botón Detener.
  */
-export function useAgent(mode: PermissionMode) {
+export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [running, setRunning] = useState(false);
   const cancelRef = useRef({ cancelled: false });
@@ -41,6 +43,8 @@ export function useAgent(mode: PermissionMode) {
   const abortRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const modeRef = useRef<PermissionMode>(mode);
+  const onCaptureRef = useRef(opts.onCapture);
+  onCaptureRef.current = opts.onCapture;
 
   messagesRef.current = messages;
   modeRef.current = mode;
@@ -310,6 +314,285 @@ export function useAgent(mode: PermissionMode) {
     [mode, patch],
   );
 
+
+  /**
+   * Repite acciones grabadas (todo el flujo, o una sola si se da `onlyId`) en la pestaña activa.
+   * Pulsar "Repetir" es el permiso para los pasos normales; los sensibles (enviar, pagar, borrar…)
+   * siempre piden aprobación, y los campos de contraseña o pago los completa la persona.
+   */
+  const replay = useCallback(
+    async (flow: SavedFlow, onlyId?: string) => {
+      if (runningRef.current) return;
+      const list = onlyId ? flow.actions.filter((a) => a.id === onlyId) : flow.actions;
+      if (list.length === 0) return;
+      runningRef.current = true;
+      const token = { cancelled: false };
+      cancelRef.current = token;
+      const check = () => {
+        if (token.cancelled) throw new Cancelled();
+      };
+      const sleep = async (ms: number) => {
+        await new Promise((r) => setTimeout(r, ms));
+        check();
+      };
+
+      const getMode = (): PermissionMode => modeRef.current; // el usuario puede cambiar de modo a mitad
+      const id = uid();
+      const steps: PlanStep[] = list.map((a) => ({
+        id: uid(),
+        code: `${a.type}()`,
+        label: describeRecorded(a),
+        state: 'pending',
+      }));
+      setMessages((ms) => [
+        ...ms,
+        {
+          id: uid(),
+          role: 'user',
+          text: onlyId ? `▶ Repetir: ${describeRecorded(list[0])}` : `▶ Repetir «${flow.title}»`,
+          attachments: [],
+        },
+        { id, role: 'agent', replay: true, plan: { steps, open: true, done: false }, streaming: true },
+      ]);
+      setRunning(true);
+
+      const setStep = (i: number, state: PlanStep['state']) =>
+        patch(id, (m) => ({
+          ...m,
+          plan: m.plan && { ...m.plan, steps: m.plan.steps.map((s, k) => (k === i ? { ...s, state } : s)) },
+        }));
+      const ask = async (text: string) => {
+        patch(id, (m) => ({ ...m, approval: { action: text, state: 'pending' } }));
+        const ok = await new Promise<boolean>((resolve) => {
+          approvalRef.current = resolve;
+        });
+        approvalRef.current = null;
+        check();
+        patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: ok ? 'approved' : 'rejected' } }));
+        return ok;
+      };
+
+      let final = onlyId ? 'Listo: repetí la acción.' : 'Listo: repetí todas las acciones grabadas.';
+      let completed = false;
+      let wasCancelled = false;
+      let tabId: number | null = null;
+      try {
+        if (getMode() === 'readonly') {
+          final = 'Estás en modo **Solo lectura**. Cambia a Manual o Automático para que pueda actuar en la página.';
+          return;
+        }
+        const t0 = await tabState();
+        check();
+        if (!t0) {
+          final = 'No puedo actuar en esta pestaña. Abre una página web normal (http o https).';
+          return;
+        }
+        tabId = t0.id;
+        if (isBlockedHost(t0.host)) {
+          final = `Por seguridad, Hanzo no actúa en **${t0.host}** (banca y pagos).`;
+          return;
+        }
+
+        // Punto de partida: solo se cambia de sitio con tu aprobación.
+        const startHost = hostOf(onlyId ? list[0].url : flow.startUrl ?? list[0].url);
+        if (startHost && startHost !== hostOf(t0.url)) {
+          const startUrl = onlyId ? list[0].url : flow.startUrl ?? list[0].url;
+          if (onlyId || isBlockedHost(startHost)) {
+            final = isBlockedHost(startHost)
+              ? `Por seguridad, Hanzo no actúa en **${startHost}** (banca y pagos).`
+              : `Esta acción se grabó en **${startHost}**. Abre esa página y vuelve a pulsarla.`;
+            return;
+          }
+          if (!(await ask(`abrir ${startUrl} para empezar el flujo`))) {
+            final = 'No abrí la página de inicio; detuve la repetición.';
+            return;
+          }
+          await chrome.tabs.update(t0.id, { url: startUrl });
+          await waitReady(t0.id);
+          check();
+        }
+
+        const tid = t0.id;
+        let finished = true;
+        for (let i = 0; i < list.length; i++) {
+          check();
+          if (getMode() === 'readonly') {
+            final = 'Cambiaste a Solo lectura; me detuve.';
+            finished = false;
+            break;
+          }
+          const a = list[i];
+          const prev = i > 0 ? list[i - 1] : undefined;
+          const desc = describeRecorded(a);
+          setStep(i, 'running');
+
+          const cur = await tabState(tid);
+          check();
+          if (!cur) {
+            final = 'La pestaña ya no está disponible; me detuve.';
+            finished = false;
+            break;
+          }
+          if (isBlockedHost(cur.host)) {
+            final = `Por seguridad, Hanzo no actúa en **${cur.host}** (banca y pagos).`;
+            finished = false;
+            break;
+          }
+
+          if (a.type === 'capture') {
+            onCaptureRef.current?.();
+            setStep(i, 'done');
+            await sleep(700);
+            continue;
+          }
+          if (a.type === 'scroll') {
+            await inTab(tid, injectedScrollTo, [Number(a.value) || 0]);
+            setStep(i, 'done');
+            await sleep(500);
+            continue;
+          }
+          if (a.type === 'navigate') {
+            if (!sameUrl(cur.url, a.url)) await waitReady(tid, 4000); // quizá el clic anterior ya está navegando
+            const now = await tabState(tid);
+            check();
+            if (now && sameUrl(now.url, a.url)) {
+              setStep(i, 'done');
+              continue;
+            }
+            const target = hostOf(a.url);
+            if (!target || isBlockedHost(target)) {
+              final = `Por seguridad no abro ${target || 'esa dirección'}; me detuve.`;
+              setStep(i, 'skipped');
+              finished = false;
+              break;
+            }
+            if (!now || target !== hostOf(now.url)) {
+              if (!(await ask(`abrir ${a.url}`))) {
+                final = 'Rechazaste abrir otra página; detuve la repetición.';
+                setStep(i, 'skipped');
+                finished = false;
+                break;
+              }
+            }
+            await chrome.tabs.update(tid, { url: a.url });
+            await waitReady(tid);
+            check();
+            setStep(i, 'done');
+            await sleep(500);
+            continue;
+          }
+
+          // Acciones sobre un elemento: la página debe ser la que se grabó
+          if (hostOf(a.url) && hostOf(a.url) !== hostOf(cur.url)) {
+            final = `La página cambió a **${hostOf(cur.url)}** (se grabó en ${hostOf(a.url)}). Por seguridad me detuve.`;
+            setStep(i, 'skipped');
+            finished = false;
+            break;
+          }
+          // Un envío que provocó el clic o Enter anterior ya se hizo con ese paso: no se repite
+          if (a.type === 'submit' && prev && (prev.type === 'click' || prev.type === 'key') && a.t - prev.t < 1000) {
+            setStep(i, 'done');
+            continue;
+          }
+
+          let f: FindRes | undefined;
+          for (let k = 0; k < 12; k++) {
+            check();
+            try {
+              f = await inTab(tid, injectedFind, [{ selector: a.selector, label: a.label, type: a.type }]);
+            } catch {
+              f = undefined; // la página aún está cargando
+            }
+            if (f?.found) break;
+            await sleep(500);
+          }
+          if (!f?.found) {
+            final = `No encontré «${a.label || 'el elemento'}» en esta página. Abre la página donde empezó la grabación${
+              flow.startUrl ? ` (${flow.startUrl})` : ''
+            } y vuelve a intentarlo.`;
+            setStep(i, 'skipped');
+            finished = false;
+            break;
+          }
+
+          await inTab(tid, injectedHighlight, [0, desc]);
+          if (f.risk === 'blocked') {
+            // Contraseñas, tarjetas, identidad: nunca se rellenan; lo hace la persona
+            const ok = await ask(`que completes tú el campo «${f.label}» (dato sensible: no se guarda ni lo toco). Hazlo en la página y aprueba para continuar`);
+            await inTab(tid, injectedClear, []).catch(() => {});
+            if (!ok) {
+              final = 'Detuve la repetición porque no se completó el campo sensible.';
+              setStep(i, 'skipped');
+              finished = false;
+              break;
+            }
+            setStep(i, 'done');
+            await sleep(400);
+            continue;
+          }
+          if (f.risk === 'high' || a.type === 'submit') {
+            if (!(await ask(`${desc} (acción sensible)`))) {
+              final = 'Rechazaste la acción; detuve la repetición.';
+              setStep(i, 'skipped');
+              finished = false;
+              break;
+            }
+          } else {
+            await sleep(450); // alcanzas a ver qué se va a tocar
+          }
+
+          const res = await inTab(tid, injectedReplayAct, [{ type: a.type, value: a.value }]);
+          check();
+          if (!res?.ok) {
+            final = `No pude ${desc.charAt(0).toLowerCase()}${desc.slice(1)}: ${res?.msg ?? 'sin respuesta'}.`;
+            setStep(i, 'skipped');
+            finished = false;
+            break;
+          }
+          setStep(i, 'done');
+          await sleep(500);
+          await waitReady(tid, 8000); // si la acción abrió otra página, se espera a que cargue
+          check();
+        }
+        completed = finished;
+      } catch (e) {
+        if (!(e instanceof Cancelled)) throw e;
+        wasCancelled = true;
+        patch(id, (m) => ({
+          ...m,
+          streaming: false,
+          stopped: true,
+          approval: m.approval?.state === 'pending' ? { ...m.approval, state: 'rejected' } : m.approval,
+          plan: m.plan && {
+            ...m.plan,
+            steps: m.plan.steps.map((s) => (s.state === 'running' || s.state === 'pending' ? { ...s, state: 'skipped' } : s)),
+          },
+        }));
+      } finally {
+        if (tabId !== null) inTab(tabId, injectedClear, []).catch(() => {});
+        if (!wasCancelled) {
+          patch(id, (m) => ({
+            ...m,
+            answer: final,
+            streaming: false,
+            plan: m.plan && {
+              ...m.plan,
+              done: true,
+              steps: completed
+                ? m.plan.steps
+                : m.plan.steps.map((s) => (s.state === 'running' || s.state === 'pending' ? { ...s, state: 'skipped' } : s)),
+            },
+          }));
+        }
+        if (cancelRef.current === token) {
+          runningRef.current = false;
+          setRunning(false);
+        }
+      }
+    },
+    [patch],
+  );
+
   const stop = useCallback(() => {
     cancelRef.current.cancelled = true;
     abortRef.current?.abort();
@@ -340,5 +623,5 @@ export function useAgent(mode: PermissionMode) {
     [stop],
   );
 
-  return { messages, running, send, stop, resolveApproval, togglePlan, reset, load };
+  return { messages, running, send, replay, stop, resolveApproval, togglePlan, reset, load };
 }

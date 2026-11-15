@@ -4,6 +4,7 @@ import { injectedStart, injectedStop } from '../lib/recorderInject';
 import { loadFlows, persistFlows } from '../lib/flows';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const MAX_RECORDED = 80; // tope de acciones por grabación
 const hasChrome = () => typeof chrome !== 'undefined' && !!chrome.scripting?.executeScript;
 
 // Acciones de ejemplo, solo para la vista previa fuera de la extensión (`vite dev`)
@@ -27,15 +28,22 @@ export function useFlowRecorder(tab: TabInfo) {
   const cleanupRef = useRef<() => void>(() => {});
   const tabRef = useRef(tab);
   tabRef.current = tab;
+  const recordingRef = useRef(false);
+  recordingRef.current = recording;
+  const startUrlRef = useRef('');
 
   const push = useCallback((a: Omit<RecordedAction, 'id'>) => {
     const list = actionsRef.current;
     const last = list[list.length - 1];
-    // Varias ediciones seguidas del mismo campo cuentan como una sola acción
-    const next =
-      last && a.type === 'input' && last.type === 'input' && last.selector === a.selector
-        ? [...list.slice(0, -1), { ...a, id: last.id }]
-        : [...list, { ...a, id: uid() }];
+    // El envío que provoca un clic o Enter ya queda cubierto por ese clic o Enter (evita enviar dos veces al repetir)
+    if (a.type === 'submit' && last && (last.type === 'click' || last.type === 'key') && a.t - last.t < 1000) return;
+    if (list.length >= MAX_RECORDED && !(last && a.type === 'scroll' && last.type === 'scroll')) return;
+    // Varias ediciones seguidas del mismo campo (o desplazamientos seguidos) cuentan como una sola acción
+    const merge =
+      !!last &&
+      ((a.type === 'input' && last.type === 'input' && last.selector === a.selector) ||
+        (a.type === 'scroll' && last.type === 'scroll'));
+    const next = merge ? [...list.slice(0, -1), { ...a, id: last.id }] : [...list, { ...a, id: uid() }];
     actionsRef.current = next;
     setActions(next);
   }, []);
@@ -73,6 +81,7 @@ export function useFlowRecorder(tab: TabInfo) {
       }
       const tabId = active.id;
       tabIdRef.current = tabId;
+      startUrlRef.current = active.url ?? '';
       await chrome.scripting.executeScript({ target: { tabId }, func: injectedStart });
 
       let lastUrl = active.url ?? '';
@@ -120,7 +129,14 @@ export function useFlowRecorder(tab: TabInfo) {
       return;
     }
     const host = tabRef.current.host || 'la página';
-    const flow: SavedFlow = { id: uid(), title: `Flujo en ${host}`, host, createdAt: Date.now(), actions: list };
+    const flow: SavedFlow = {
+      id: uid(),
+      title: `Flujo en ${host}`,
+      host,
+      createdAt: Date.now(),
+      startUrl: startUrlRef.current || list[0]?.url,
+      actions: list,
+    };
     setFlows((f) => {
       const next = [flow, ...f];
       persistFlows(next);
@@ -128,6 +144,12 @@ export function useFlowRecorder(tab: TabInfo) {
     });
     setSavedKey((k) => k + 1);
   }, []);
+
+  /** Una captura de pantalla hecha mientras se graba cuenta como una acción más. */
+  const addCapture = useCallback(() => {
+    if (!recordingRef.current) return;
+    push({ type: 'capture', selector: '', label: 'Captura de pantalla', url: tabRef.current.url, t: Date.now() });
+  }, [push]);
 
   const toggle = useCallback(() => (recording ? stop() : start()), [recording, start, stop]);
 
@@ -149,5 +171,5 @@ export function useFlowRecorder(tab: TabInfo) {
     return () => clearTimeout(t);
   }, [error]);
 
-  return { recording, actions, secs, error, flows, savedKey, toggle, removeFlow };
+  return { recording, actions, secs, error, flows, savedKey, toggle, removeFlow, addCapture };
 }

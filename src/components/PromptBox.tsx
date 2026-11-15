@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, Check, ChevronDown, FileText, Globe, Paperclip, Plus, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, Camera, Check, ChevronDown, FileText, Globe, MousePointerClick, Paperclip, Plus, Sparkles, Square, X } from 'lucide-react';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
+import { splitCommand } from '../lib/actions';
 import { useClickOutside } from '../hooks/useClickOutside';
 
 const LINE = 20; // px por línea (text-sm / leading-5)
@@ -12,6 +13,9 @@ const MAX_H = LINE * 6;
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 const SKILLS = ['Llave 1', 'Llave 2', 'Llave 3'];
+
+/** Comandos tipo skill: al escribir "/" aparecen y, una vez elegidos, se resaltan en azul. */
+const COMMANDS = [{ name: '/hacer', desc: 'Actúa en la página: clic, escribir y desplazar' }];
 
 const menuAnim = {
   initial: { opacity: 0, y: 6, scale: 0.97 },
@@ -38,9 +42,13 @@ interface Props {
   recActions: RecordedAction[];
   recError: string | null;
   onToggleRecord: () => void;
+  /** Sube cada vez que una repetición grabada pide una captura de pantalla. */
+  captureSignal?: number;
+  /** Se llama cuando el usuario hizo una captura (para anotarla si se está grabando). */
+  onCaptured?: () => void;
 }
 
-export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord }: Props) {
+export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord, captureSignal = 0, onCaptured }: Props) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [tabLinked, setTabLinked] = useState(true);
@@ -50,6 +58,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const [plusOpen, setPlusOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [skill, setSkill] = useState<string | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
   const plusRef = useRef<HTMLDivElement>(null);
   const skillsRef = useRef<HTMLDivElement>(null);
   useClickOutside(plusRef, () => setPlusOpen(false), plusOpen);
@@ -104,12 +113,20 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
         url = PLACEHOLDER_SHOT; // solo en `vite dev`, fuera de la extensión
       }
       setAttachments((a) => [...a, { id: uid(), kind: 'screenshot', name: `Captura de ${tab.host}`, url }]);
+      onCaptured?.();
     } catch {
       flash('No se pudo capturar esta pestaña. Chrome no permite capturar páginas internas (chrome://) ni la tienda de extensiones.');
     } finally {
       setCapturing(false);
     }
   };
+
+  // Una repetición grabada que incluye una captura la dispara aquí
+  const captureRef = useRef(capture);
+  captureRef.current = capture;
+  useEffect(() => {
+    if (captureSignal > 0) void captureRef.current();
+  }, [captureSignal]);
 
   const onFiles = (files: FileList | null) => {
     Array.from(files ?? []).forEach((f) => {
@@ -127,8 +144,48 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
 
   const canSend = text.trim().length > 0;
 
+  // Menú de comandos: aparece al escribir "/" al inicio, antes del primer espacio
+  const typed = text.toLowerCase();
+  const menu = text.startsWith('/') && !/\s/.test(text) ? COMMANDS.filter((c) => c.name.startsWith(typed)) : [];
+  const pickCommand = (name: string) => {
+    setText(name + ' ');
+    taRef.current?.focus();
+  };
+  const cmd = splitCommand(text);
+
   return (
-    <div className="shrink-0 p-3">
+    <div className="relative shrink-0 p-3">
+      <AnimatePresence>
+        {menu.length > 0 && (
+          <m.div
+            {...menuAnim}
+            role="listbox"
+            aria-label="Comandos"
+            className="absolute inset-x-3 bottom-full z-40 mb-1 rounded-xl border border-line bg-card p-1 shadow-pop"
+          >
+            <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-mute">Habilidades</p>
+            {menu.map((c) => (
+              <button
+                key={c.name}
+                role="option"
+                aria-selected
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pickCommand(c.name)}
+                className="flex w-full items-center gap-2.5 rounded-lg bg-blue-500/10 p-2 text-left"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <MousePointerClick size={15} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-semibold text-blue-600 dark:text-blue-400">{c.name}</span>
+                  <span className="block truncate text-xs text-mute">{c.desc}</span>
+                </span>
+                <span className="text-[11px] text-mute">Enter ↵</span>
+              </button>
+            ))}
+          </m.div>
+        )}
+      </AnimatePresence>
       <div className={`rounded-2xl p-px shadow-float transition-colors ${running ? 'run-border' : 'bg-line focus-within:bg-accent/60'}`}>
       <div className="rounded-[15px] bg-card">
         <AnimatePresence initial={false}>
@@ -218,21 +275,48 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
           </button>
         )}
 
-        <textarea
-          ref={taRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={2}
-          placeholder="Escribe una instrucción o tarea para esta página..."
-          style={{ minHeight: MIN_H, maxHeight: MAX_H, lineHeight: `${LINE}px` }}
-          className="block w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none"
-        />
+        <div className="relative">
+          {/* Con un comando escrito, el texto se dibuja aquí (comando en azul) y el cuadro real queda transparente */}
+          {cmd && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div
+                className="whitespace-pre-wrap break-words px-3 pb-1 pt-2.5 text-sm text-ink"
+                style={{ lineHeight: `${LINE}px`, transform: `translateY(${-scrollTop}px)` }}
+              >
+                {cmd.head}
+                <span className="rounded bg-blue-500/15 font-medium text-blue-600 shadow-[0_0_0_2px_rgb(59_130_246/0.15)] dark:text-blue-400">
+                  {cmd.cmd}
+                </span>
+                {cmd.rest}
+                {'\u200b'}
+              </div>
+            </div>
+          )}
+          <textarea
+            ref={taRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (menu.length > 0 && (e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+                e.preventDefault();
+                pickCommand(menu[0].name);
+                return;
+              }
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            rows={2}
+            placeholder="Escribe una instrucción o tarea para esta página..."
+            style={{ minHeight: MIN_H, maxHeight: MAX_H, lineHeight: `${LINE}px` }}
+            className={`mirror-ta block w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-sm placeholder:text-mute/70 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+              cmd ? 'text-transparent caret-ink' : 'text-ink'
+            }`}
+          />
+        </div>
 
         {/* Herramientas */}
         <div className="flex items-center gap-1 px-1.5 pb-1.5">
