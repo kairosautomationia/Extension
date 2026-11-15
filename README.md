@@ -47,3 +47,16 @@ npx wrangler secret put GEEKFLARE_KEY
 ```
 
 La clave nunca va en el código ni en la extensión.
+
+## Acciones en la página (`/hacer`)
+
+Escribe `/hacer <tarea>` en el chat (por ejemplo: `/hacer escribe "zapatos" en el buscador`). Hanzo numera los elementos visibles de la pestaña activa, el modelo propone **una acción por turno** (clic, escribir, desplazar) y la extensión la ejecuta.
+
+Límites de seguridad:
+
+- **Solo lectura**: no actúa. **Manual**: pide aprobación antes de cada acción. **Automático**: solo aprueba solo lo de bajo riesgo; botones de pagar/enviar/eliminar/confirmar y envíos de formularios siempre piden aprobación.
+- Nunca escribe en campos de contraseña, tarjeta, CVV, cuentas, cédula/pasaporte ni archivos (se re-comprueba dentro de la página).
+- No actúa en sitios de banca y pagos (lista fija en `src/lib/actions.ts`).
+- Solo la pestaña activa; si cambia de sitio, se detiene. Máximo 12 pasos por tarea y botón Detener.
+- El texto de la página se trata como dato, nunca como instrucciones. El Worker valida cada acción del modelo (ids, tipos, longitudes).
+- La acción se resalta con un recuadro naranja en la página antes de ejecutarse.

@@ -2,6 +2,8 @@
 const DEFAULT_API = 'https://extension.kairosautomation-ia.workers.dev';
 const BASE = (((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API)).replace(/\/$/, '');
 
+export const API_BASE = BASE;
+
 export interface ApiMessage {
   role: 'user' | 'assistant';
   content: string;
