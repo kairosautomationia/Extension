@@ -34,6 +34,10 @@ export async function streamAgent(
   onToken: (t: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  const inExtension = typeof location !== 'undefined' && location.protocol === 'chrome-extension:';
+  if (inExtension && !BASE) {
+    throw new Error('falta VITE_API_URL (URL del Worker) al compilar la extensión');
+  }
   const res = await fetch(`${BASE}/api/agent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
