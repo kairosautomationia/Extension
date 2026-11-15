@@ -51,14 +51,14 @@
     const w = btn.offsetWidth || 160;
     const h = btn.offsetHeight || 30;
     const gap = 12;
-    // Se ancla a la primera línea de la selección y se coloca ARRIBA; abajo solo si no hay espacio
-    const rects = sel.getRangeAt(0).getClientRects();
-    const first = rects.length ? rects[0] : rect;
+    // Primera línea real de la selección (se ignoran rectángulos vacíos o de bloques enteros)
+    const list = Array.prototype.slice.call(sel.getRangeAt(0).getClientRects()).filter((r) => r.width > 1 && r.height > 1 && r.height < 120);
+    const first = list.length ? list[0] : rect;
     const cx = first.left + Math.min(first.width, 140) / 2;
-    const left = Math.min(Math.max(10, cx - w / 2), window.innerWidth - w - 10);
+    const left = Math.min(Math.max(10, cx - w / 2), Math.max(10, window.innerWidth - w - 10));
     let top = first.top - h - gap;
     const below = top < 10;
-    if (below) top = rect.bottom + gap;
+    if (below) top = Math.min(rect.bottom + gap, Math.max(10, window.innerHeight - h - 10));
     wrap.classList.toggle('dn', below);
     wrap.style.setProperty('--ax', Math.round(Math.min(Math.max(18, cx - left), w - 18)) + 'px');
     host.style.left = Math.round(left) + 'px';
@@ -68,9 +68,10 @@
   let timer;
   const schedule = () => {
     clearTimeout(timer);
-    timer = setTimeout(show, 30);
+    timer = setTimeout(safeShow, 30);
   };
 
+  const safeShow = () => { try { show(); } catch (e) { hide(); } };
   document.addEventListener('mouseup', (e) => {
     if (e.composedPath && e.composedPath().indexOf(host) >= 0) return;
     schedule();
