@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, ChevronDown, FileText, Globe, KeyRound, Loader2, MousePointerClick, Paperclip, Plus, RefreshCw, Square, X } from 'lucide-react';
+import { ArrowUp, Camera, CalendarDays, ChevronDown, Cloud, FileText, Github, Globe, HardDrive, Link2, Mail, MessageCircle, MousePointerClick, Paperclip, Plus, Square, Workflow, X } from 'lucide-react';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
 import { useClickOutside } from '../hooks/useClickOutside';
-import { checkComposio, type ConnState } from '../lib/api';
 
 const LINE = 20; // px por línea (text-sm / leading-5)
 const MIN_H = LINE * 2;
@@ -48,6 +47,24 @@ interface Props {
   onCaptured?: () => void;
 }
 
+const LINKS = [
+  { name: 'GitHub', url: 'https://github.com', Icon: Github },
+  { name: 'Cloudflare', url: 'https://dash.cloudflare.com', Icon: Cloud },
+  { name: 'Gmail', url: 'https://mail.google.com', Icon: Mail },
+  { name: 'Drive', url: 'https://drive.google.com', Icon: HardDrive },
+  { name: 'Calendar', url: 'https://calendar.google.com', Icon: CalendarDays },
+  { name: 'Make', url: 'https://www.make.com', Icon: Workflow },
+  { name: 'WhatsApp', url: 'https://web.whatsapp.com', Icon: MessageCircle },
+] as const;
+
+function openLink(url: string) {
+  try {
+    void chrome.tabs.create({ url });
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
 export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord, captureSignal = 0, onCaptured }: Props) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -57,20 +74,11 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
-  const [composio, setComposio] = useState<ConnState | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const plusRef = useRef<HTMLDivElement>(null);
   const skillsRef = useRef<HTMLDivElement>(null);
   useClickOutside(plusRef, () => setPlusOpen(false), plusOpen);
   useClickOutside(skillsRef, () => setSkillsOpen(false), skillsOpen);
-  const refreshComposio = () => {
-    setComposio({ state: 'checking' });
-    void checkComposio().then(setComposio);
-  };
-  // Al abrir el menú de llaves se comprueba la conexión (una vez)
-  useEffect(() => {
-    if (skillsOpen && composio === null) refreshComposio();
-  }, [skillsOpen, composio]);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -398,8 +406,8 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 aria-expanded={skillsOpen}
                 className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-mute hover:bg-bubble hover:text-ink"
               >
-                <KeyRound size={13} />
-                Llaves
+                <Link2 size={13} />
+                Vínculos
                 <ChevronDown size={13} className={`transition-transform ${skillsOpen ? 'rotate-180' : ''}`} />
               </button>
               <AnimatePresence>
@@ -407,46 +415,27 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                   <m.div
                     {...menuAnim}
                     role="dialog"
-                    aria-label="Llaves y conectores"
+                    aria-label="Vínculos"
                     className="absolute bottom-10 right-0 z-40 w-72 rounded-xl border border-line bg-card p-1.5 shadow-pop"
                   >
-                    <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Conectores</p>
-                    <div className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-paper">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-ink">
-                        <KeyRound size={17} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] font-semibold leading-tight">Composio</span>
-                        <span className="mt-0.5 flex items-center gap-1.5 text-xs leading-snug text-mute">
-                          <span
-                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                              composio?.state === 'ok' ? 'bg-emerald-500' : composio?.state === 'checking' || !composio ? 'bg-mute/50' : 'bg-amber-500'
-                            }`}
-                          />
-                          {composio?.state === 'ok'
-                            ? `Conectado, ${composio.tools} funciones`
-                            : composio?.state === 'no-key'
-                              ? 'Falta la llave en el servidor'
-                              : composio?.state === 'bad-key'
-                                ? 'La llave no es válida'
-                                : composio?.state === 'error'
-                                  ? 'No se pudo conectar'
-                                  : 'Comprobando…'}
-                        </span>
-                      </span>
-                      <button
-                        onClick={refreshComposio}
-                        disabled={composio?.state === 'checking'}
-                        aria-label="Comprobar conexión de Composio"
-                        title="Comprobar conexión"
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-mute hover:bg-bubble hover:text-ink disabled:opacity-60"
-                      >
-                        {composio?.state === 'checking' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                      </button>
+                    <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Abrir en una pestaña nueva</p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {LINKS.map(({ name, url, Icon }) => (
+                        <button
+                          key={name}
+                          onClick={() => {
+                            openLink(url);
+                            setSkillsOpen(false);
+                          }}
+                          className="flex items-center gap-2.5 rounded-lg p-2 text-left hover:bg-paper"
+                        >
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-ink">
+                            <Icon size={16} />
+                          </span>
+                          <span className="min-w-0 truncate text-[13px] font-medium">{name}</span>
+                        </button>
+                      ))}
                     </div>
-                    <p className="px-2.5 pb-1.5 pt-1 text-[11px] leading-snug text-mute">
-                      Acceso a más de mil aplicaciones. La llave se guarda como secreto en el servidor, nunca en la extensión.
-                    </p>
                   </m.div>
                 )}
               </AnimatePresence>
