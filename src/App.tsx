@@ -51,7 +51,8 @@ export default function App() {
       if (agent.running) setSeed((s) => ({ text: t, n: s.n + 1 }));
       else agent.send(t);
     },
-    () => `Página abierta ahora: "${tab.title}" (${tab.host}).`,
+    // Solo el sitio: el título de una página es texto de terceros y no debe llegar al agente como si fuera una orden
+    () => `El usuario tiene abierto el sitio ${tab.host}.`,
   );
 
   // Historial: cada conversación se guarda sola al terminar cada respuesta.

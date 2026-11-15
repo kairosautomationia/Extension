@@ -70,3 +70,22 @@ Al escribir `/` en el chat aparece la habilidad **/hacer** (Enter o Tab la inser
 3. Allí, el botón ▶ repite todo el flujo en la página; tocar una acción repite solo esa.
 
 Seguridad al repetir: los datos de contraseña, tarjeta o identidad nunca se guardan ni se rellenan (te pide que los completes tú); enviar, pagar, borrar o confirmar siempre pide aprobación; no actúa en banca y pagos; se detiene si la página cambia de sitio o no encuentra el elemento; solo cambia de sitio con tu aprobación. Un botón **Detener** corta la repetición en cualquier momento.
+
+## Agente de voz (ElevenLabs)
+
+El botón de ondas, entre **Vínculos** y enviar, abre una conversación de voz con el agente *Hanzo* de ElevenLabs
+(ID del agente en `src/hooks/useVoiceAgent.ts`; el ID es público, la clave secreta nunca va en la extensión).
+
+- Conexión por WebRTC con el SDK `@elevenlabs/client`.
+- Herramienta de cliente **`pedir_a_hanzo`** (parámetro de texto `instruccion`): lo que el usuario pide por voz entra al
+  mismo chat de Hanzo, con las mismas aprobaciones y límites de seguridad que si lo hubiera escrito.
+- Al conectar solo se le dice al agente en qué sitio está el usuario (nunca el título de la página, que es texto de terceros).
+- Si Chrome no deja pedir el micrófono desde el panel lateral, se abre `mic.html` una vez para concederlo.
+- En ElevenLabs hay que tener creada esa herramienta con ese nombre exacto y pegado el mensaje del sistema de Hanzo.
+
+## Otras piezas del panel
+
+- **Vínculos**: accesos rápidos (GitHub, Cloudflare, Gmail, Drive, Calendar, Make, WhatsApp) con logos de marca (`src/lib/brands.ts`).
+- **Preguntar a Hanzo**: burbuja al seleccionar texto en una página (`public/content.js`); no aparece en bancos/pagos ni en contraseñas.
+- **Clic derecho → Hanzo**: abre el panel lateral.
+- Requiere Chrome 116 o superior.

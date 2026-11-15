@@ -20,6 +20,7 @@ export function useVoiceAgent(onInstruction: (text: string) => void, context: ()
   const [error, setError] = useState<{ msg: string; n: number } | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const busyRef = useRef(false);
+  const cancelRef = useRef(false);
   const cbRef = useRef(onInstruction);
   cbRef.current = onInstruction;
   const ctxRef = useRef(context);
@@ -41,6 +42,7 @@ export function useVoiceAgent(onInstruction: (text: string) => void, context: ()
   const start = useCallback(async () => {
     if (busyRef.current || sessionRef.current) return;
     busyRef.current = true;
+    cancelRef.current = false;
     setState('connecting');
     try {
       try {
@@ -80,6 +82,12 @@ export function useVoiceAgent(onInstruction: (text: string) => void, context: ()
         onModeChange: (m: { mode?: string }) => setState(m?.mode === 'speaking' ? 'speaking' : 'listening'),
       };
       const conv = (await Conversation.startSession(opts as never)) as unknown as Session;
+      if (cancelRef.current) {
+        // El usuario pulsó de nuevo mientras conectaba: se cierra la sesión recién abierta
+        void conv.endSession().catch(() => undefined);
+        setState('off');
+        return;
+      }
       sessionRef.current = conv;
       try {
         conv.sendContextualUpdate?.(ctxRef.current());
@@ -97,7 +105,10 @@ export function useVoiceAgent(onInstruction: (text: string) => void, context: ()
 
   const toggle = useCallback(() => {
     if (state === 'off') void start();
-    else void stop();
+    else {
+      cancelRef.current = true;
+      void stop();
+    }
   }, [state, start, stop]);
 
   useEffect(
