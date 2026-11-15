@@ -66,7 +66,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
   }, []);
 
   const send = useCallback(
-    async (text: string, attachments: Attachment[] = []) => {
+    async (text: string, attachments: Attachment[] = [], shown?: string) => {
       if (runningRef.current) return; // un solo agente activo a la vez
       runningRef.current = true;
       const token = { cancelled: false };
@@ -90,9 +90,9 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
       }));
       setMessages((ms) => [
         ...ms,
-        { id: uid(), role: 'user', text, attachments },
+        { id: uid(), role: 'user', text: shown ?? text, attachments },
         // En chat normal los pasos internos van en segundo plano; solo las tareas /hacer muestran el plan.
-        { id, role: 'agent', plan: isTask ? { steps, open: true, done: false } : undefined, streaming: true },
+        { id, role: 'agent', plan: isTask ? { steps, open: !shown, done: false } : undefined, streaming: true },
       ]);
       setRunning(true);
 

@@ -55,7 +55,7 @@ export default function App() {
       const accion = /^\s*(abr[eiíoa]\w*|ve\b|ir\b|vamos|entra\w*|navega\w*|busca\w*|escribe\w*|teclea\w*|pulsa\w*|haz\b|hac[eé]\b|click\w*|clic\w*|selecciona\w*|desplaza\w*|baja\b|sube\b|rellena\w*|llena\w*|cierra\w*|reproduce\w*|pon\b|pone\b)/i;
       const t = /^\s*\//.test(raw) || !accion.test(raw) ? raw : `/hacer ${raw.trim()}`;
       if (agent.running) setSeed((s) => ({ text: t, n: s.n + 1 }));
-      else agent.send(t);
+      else agent.send(t, [], t === raw ? undefined : raw.trim()); // se muestra lo dicho, sin el "/hacer" y con el plan plegado
     },
     // Solo el sitio: el título de una página es texto de terceros y no debe llegar al agente como si fuera una orden
     () => `El usuario tiene abierto el sitio ${tab.host}.`,
