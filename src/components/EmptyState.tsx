@@ -27,7 +27,7 @@ function Pill({ label, onClick, delay }: { label: string; onClick: () => void; d
         y.set(e.clientY - r.top);
       }}
       onClick={onClick}
-      className="group relative w-fit max-w-full overflow-hidden rounded-full border border-line bg-card px-4 py-2.5 text-left text-[13.5px] font-medium shadow-sm transition-colors hover:border-accent/60"
+      className="group relative w-full overflow-hidden rounded-full border border-line bg-card px-5 py-3.5 text-left text-[15px] font-medium shadow-sm transition-colors hover:border-accent/60"
     >
       <m.span
         aria-hidden
@@ -46,7 +46,7 @@ export default function EmptyState({ tab, onPick }: { tab: TabInfo; onPick: (t: 
 
       {/* Centro: icono, nombre y saludo */}
       <m.div
-        className="relative flex flex-1 flex-col items-center justify-center py-6 text-center"
+        className="relative flex flex-1 flex-col items-center justify-center py-8 text-center"
         initial="hide"
         animate="show"
         variants={{ show: { transition: { staggerChildren: 0.08 } } }}
@@ -59,31 +59,27 @@ export default function EmptyState({ tab, onPick }: { tab: TabInfo; onPick: (t: 
             transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
           />
           <m.span
-            className="relative grid h-14 w-14 place-items-center rounded-2xl bg-accent text-white shadow-float"
+            className="relative grid h-16 w-16 place-items-center rounded-2xl bg-accent text-white shadow-float"
             animate={{ y: [0, -3, 0] }}
             transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <Bot size={30} strokeWidth={1.75} />
+            <Bot size={34} strokeWidth={1.75} />
           </m.span>
         </m.div>
 
-        <m.span variants={{ hide: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0 } }} className="mt-3 text-base font-semibold tracking-tight">
-          Hanzo
-        </m.span>
-
-        <m.p variants={{ hide: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } }} className="mt-6 text-[13px] text-mute">
+        <m.p variants={{ hide: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } }} className="mt-7 text-sm text-mute">
           {greeting()}
         </m.p>
         <m.h1
           variants={{ hide: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
-          className="mt-1 font-serif text-[30px] leading-[1.1] tracking-tight"
+          className="mt-1.5 font-serif text-[34px] leading-[1.1] tracking-tight"
         >
           ¿Por dónde empezamos?
         </m.h1>
 
         <m.div
           variants={{ hide: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } }}
-          className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-xs"
+          className="mt-5 inline-flex max-w-full items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-xs"
         >
           {tab.favIconUrl ? (
             <img src={tab.favIconUrl} alt="" className="h-3.5 w-3.5 shrink-0 rounded-sm" />
@@ -96,7 +92,7 @@ export default function EmptyState({ tab, onPick }: { tab: TabInfo; onPick: (t: 
       </m.div>
 
       {/* Abajo: preguntas de arranque */}
-      <div className="relative flex flex-col items-start gap-2">
+      <div className="relative flex flex-col gap-2.5">
         {SUGGESTIONS.map((s, i) => (
           <Pill key={s} label={s} delay={0.35 + i * 0.07} onClick={() => onPick(s)} />
         ))}
