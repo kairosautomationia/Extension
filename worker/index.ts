@@ -212,18 +212,22 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === '/api/status' && request.method === 'GET') {
       if (url.searchParams.get('probe') && env.GEEKFLARE_KEY) {
-        // Diagnóstico temporal: prueba la lectura de una URL fija y devuelve el estado.
-        try {
-          const r = await fetch(GEEKFLARE + '/web-scraping', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'x-api-key': env.GEEKFLARE_KEY },
-            body: JSON.stringify({ url: 'https://example.com', format: 'markdown' }),
-            signal: AbortSignal.timeout(25000),
-          });
-          return json({ status: r.status, body: (await r.text()).slice(0, 400) });
-        } catch (e) {
-          return json({ error: e instanceof Error ? e.message : 'error' });
+        // Diagnóstico temporal: prueba rutas candidatas de lectura de URL y devuelve el estado de cada una.
+        const out: Record<string, unknown> = {};
+        for (const path of ['/scrape', '/webscraping', '/web-scrape', '/scraping', '/web_scraping']) {
+          try {
+            const r = await fetch(GEEKFLARE + path, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', 'x-api-key': env.GEEKFLARE_KEY },
+              body: JSON.stringify({ url: 'https://example.com', format: 'markdown' }),
+              signal: AbortSignal.timeout(20000),
+            });
+            out[path] = r.status + ' ' + (await r.text()).slice(0, 120);
+          } catch (e) {
+            out[path] = e instanceof Error ? e.message : 'error';
+          }
         }
+        return json(out);
       }
       return json({ ok: true, web: !!env.GEEKFLARE_KEY });
     }
