@@ -7,6 +7,8 @@ export const MOCK_TAB: TabInfo = {
 };
 
 export const SUGGESTIONS = [
+  '¿Qué puedes hacer?',
+  '¿Qué tipos de tareas puedo pedirte?',
   'Resumir esta página',
   'Extraer datos de la tabla',
   'Analizar página',
