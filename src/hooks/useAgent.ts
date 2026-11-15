@@ -1,25 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMessage, Attachment, Message, PermissionMode, PlanStep } from '../types';
-import { FINAL_ANSWER, READONLY_ANSWER } from '../lib/mockData';
+import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 class Cancelled extends Error {}
 
-const ACTION_STEPS: Omit<PlanStep, 'id' | 'state'>[] = [
-  { code: 'read_page()', label: 'Leer la estructura de la página' },
-  { code: 'find("button[data-testid=checkout]")', label: 'Localizar el botón de pago' },
-  { code: 'click("#submit-btn")', label: 'Confirmar el pago' },
-];
 const READ_STEPS: Omit<PlanStep, 'id' | 'state'>[] = [
-  { code: 'read_page()', label: 'Leer la estructura de la página' },
-  { code: 'get_text("main")', label: 'Extraer el contenido principal' },
-  { code: 'summarize()', label: 'Preparar el resumen' },
+  { code: 'read_page()', label: 'Leer la pestaña activa' },
+  { code: 'get_text("body")', label: 'Extraer el contenido visible' },
+  { code: 'ask_model()', label: 'Analizar y redactar la respuesta' },
 ];
 
 /**
- * Simula el ciclo de un agente: plan → (aprobación) → respuesta en streaming.
- * Sustituye `run()` por tu llamada real al modelo / ejecución en el DOM.
+ * Ciclo del agente: lee la pestaña → consulta al modelo (Worker /api/agent) → respuesta en streaming.
+ * Por ahora solo lee y analiza; las acciones sobre el DOM (clic, escribir) quedan para la siguiente fase.
  */
 export function useAgent(mode: PermissionMode) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -27,6 +22,10 @@ export function useAgent(mode: PermissionMode) {
   const cancelRef = useRef({ cancelled: false });
   const approvalRef = useRef<((ok: boolean) => void) | null>(null);
   const runningRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<Message[]>([]);
+
+  messagesRef.current = messages;
 
   // Cancela cualquier ejecución en curso al desmontar.
   useEffect(() => {
@@ -56,8 +55,8 @@ export function useAgent(mode: PermissionMode) {
       };
 
       const id = uid();
-      const readonly = mode === 'readonly';
-      const steps: PlanStep[] = (readonly ? READ_STEPS : ACTION_STEPS).map((s) => ({
+      // En esta versión el agente solo lee y analiza la página (sin acciones sobre el DOM).
+      const steps: PlanStep[] = READ_STEPS.map((s) => ({
         ...s,
         id: uid(),
         state: 'pending',
@@ -76,51 +75,41 @@ export function useAgent(mode: PermissionMode) {
         }));
 
       try {
-        await sleep(900); // "Pensando…"
-        for (let i = 0; i < steps.length; i++) {
-          const isRisky = !readonly && i === steps.length - 1;
+        await sleep(300); // "Pensando…"
+        setStep(0, 'running');
+        const page = await readPageContext();
+        check();
+        setStep(0, 'done');
+        setStep(1, 'running');
+        await sleep(150);
+        setStep(1, 'done');
+        setStep(2, 'running');
 
-          if (isRisky && mode === 'manual') {
-            // Human-in-the-loop: se pausa hasta que el usuario decida.
-            patch(id, (m) => ({
-              ...m,
-              approval: { action: "hacer clic en 'Confirmar pago'", state: 'pending' },
-            }));
-            const ok = await new Promise<boolean>((resolve) => {
-              approvalRef.current = resolve;
-            });
-            check();
-            approvalRef.current = null;
-            patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: ok ? 'approved' : 'rejected' } }));
-            if (!ok) {
-              setStep(i, 'skipped');
-              patch(id, (m) => ({
-                ...m,
-                plan: m.plan && { ...m.plan, done: true, open: false },
-                answer: 'De acuerdo, no realicé ninguna acción. La página se queda exactamente como estaba.',
-                streaming: false,
-              }));
-              return;
-            }
-          }
-
-          setStep(i, 'running');
-          await sleep(750);
-          setStep(i, 'done');
+        const image = [...attachments].reverse().find((a) => a.url && a.kind !== 'file')?.url;
+        const history: ApiMessage[] = [];
+        for (const m of messagesRef.current) {
+          if (m.role === 'user') history.push({ role: 'user', content: m.text });
+          else if (m.answer) history.push({ role: 'assistant', content: m.answer });
         }
+        history.push({ role: 'user', content: text });
 
-        patch(id, (m) => ({ ...m, plan: m.plan && { ...m.plan, done: true, open: false } }));
-        await sleep(250);
-
-        // Streaming palabra a palabra
-        const words = (readonly ? READONLY_ANSWER : FINAL_ANSWER).split(/(\s+)/);
+        const ctrl = new AbortController();
+        abortRef.current = ctrl;
         let acc = '';
-        for (const w of words) {
-          acc += w;
+        try {
+          await streamAgent({ messages: history, page, image }, (t) => {
+            acc += t;
+            patch(id, (m) => ({ ...m, answer: acc }));
+          }, ctrl.signal);
+        } catch (err) {
+          check();
+          const msg = err instanceof Error ? err.message : 'Error desconocido';
+          acc = acc || `No pude contactar al modelo: ${msg}`;
           patch(id, (m) => ({ ...m, answer: acc }));
-          await sleep(22);
         }
-        patch(id, (m) => ({ ...m, streaming: false }));
+        check();
+        setStep(2, 'done');
+        patch(id, (m) => ({ ...m, plan: m.plan && { ...m.plan, done: true, open: false }, streaming: false }));
       } catch (e) {
         if (!(e instanceof Cancelled)) throw e;
         patch(id, (m) => ({
@@ -145,6 +134,7 @@ export function useAgent(mode: PermissionMode) {
 
   const stop = useCallback(() => {
     cancelRef.current.cancelled = true;
+    abortRef.current?.abort();
     approvalRef.current?.(false);
     approvalRef.current = null;
     runningRef.current = false;
