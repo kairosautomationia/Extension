@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens: canales RGB para poder usar opacidad (bg-paper/90). Oscuro sigue al sistema. */
+:root {
+  --paper: 249 248 246;
+  --card: 255 255 255;
+  --line: 229 227 221;
+  --bubble: 239 236 230;
+  --ink: 26 25 24;
+  --mute: 107 104 98;
+  --accent: 30 58 95; /* azul marino Hanzo #1E3A5F */
+  --accent-hover: 19 41 71;
+  --accent-soft: 226 232 242;
+  --accent-ink: 30 58 95;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: 27 26 24;
+    --card: 36 35 33;
+    --line: 56 54 50;
+    --bubble: 46 44 41;
+    --ink: 241 239 234;
+    --mute: 168 164 156;
+    --accent: 60 107 184; /* marino aclarado para fondo oscuro */
+    --accent-hover: 47 84 150;
+    --accent-soft: 28 42 68;
+    --accent-ink: 150 184 238;
+    color-scheme: dark;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: rgb(var(--paper));
+  color: rgb(var(--ink));
+  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Feedback táctil en todos los botones */
+button:not(:disabled) {
+  transition-property: color, background-color, border-color, transform, opacity, box-shadow;
+  transition-duration: 150ms;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 8px;
+  border: 2px solid rgb(var(--paper));
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--accent-ink));
+  outline-offset: 2px;
+}
+
+/* Cursor de escritura en streaming */
+.caret::after {
+  content: '▍';
+  color: rgb(var(--accent-ink));
+  margin-left: 2px;
+}
+
+/* Borde de caja mientras el agente trabaja (estático si se reduce el movimiento) */
+.run-border {
+  background: rgb(var(--accent));
+}
+
+/* Brillo ambiental del estado vacío */
+.ambient {
+  background:
+    radial-gradient(60% 50% at 20% 0%, rgb(var(--accent) / 0.16), transparent 70%),
+    radial-gradient(45% 40% at 95% 25%, rgb(var(--accent) / 0.07), transparent 70%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  .caret::after {
+    animation: blink 1s steps(1) infinite;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, rgb(var(--mute)) 0%, rgb(var(--ink)) 45%, rgb(var(--mute)) 90%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2.2s linear infinite;
+  }
+
+  @keyframes run {
+    to {
+      background-position: -300% 0;
+    }
+  }
+  .run-border {
+    background: linear-gradient(90deg, rgb(var(--line)), rgb(var(--accent)), rgb(var(--line)), rgb(var(--accent)), rgb(var(--line)));
+    background-size: 300% 100%;
+    animation: run 3.2s linear infinite;
+  }
+
+  /* La aprobación pendiente pide atención: onda suave, no un parpadeo */
+  @keyframes ring {
+    0% {
+      box-shadow: 0 0 0 0 rgb(var(--accent) / 0.4);
+    }
+    100% {
+      box-shadow: 0 0 0 9px rgb(var(--accent) / 0);
+    }
+  }
+  .approval-pulse {
+    animation: ring 1.8s ease-out infinite;
+  }
+
+  @keyframes breathe {
+    50% {
+      transform: scale(1.12);
+      opacity: 0.85;
+    }
+  }
+  .breathe {
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+}
