@@ -214,7 +214,8 @@ export default {
       if (url.searchParams.get('probe') && env.GEEKFLARE_KEY) {
         // Diagnóstico temporal: prueba rutas candidatas de lectura de URL y devuelve el estado de cada una.
         const out: Record<string, unknown> = {};
-        for (const path of ['/scrape', '/webscraping', '/web-scrape', '/scraping', '/web_scraping']) {
+        for (const path of ['/webscraping', '/web-scrape', '/scraping']) {
+          await new Promise((res) => setTimeout(res, 2500)); // plan gratuito: 1 solicitud por segundo
           try {
             const r = await fetch(GEEKFLARE + path, {
               method: 'POST',
@@ -222,7 +223,7 @@ export default {
               body: JSON.stringify({ url: 'https://example.com', format: 'markdown' }),
               signal: AbortSignal.timeout(20000),
             });
-            out[path] = r.status + ' ' + (await r.text()).slice(0, 120);
+            out[path] = r.status + ' ' + (await r.text()).slice(0, 300);
           } catch (e) {
             out[path] = e instanceof Error ? e.message : 'error';
           }
