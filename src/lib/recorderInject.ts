@@ -48,7 +48,7 @@ export function injectedStart() {
 
   const send = (a: Record<string, unknown>) => {
     try {
-      chrome.runtime.sendMessage({ type: 'hanzo-action', action: { ...a, url: location.href, t: Date.now() } });
+      chrome.runtime.sendMessage({ type: 'hanzo-action', action: { ...a, url: location.href, t: Date.now() } })?.catch?.(() => {});
     } catch {
       /* la extensión se recargó */
     }

@@ -94,7 +94,7 @@
     hide();
     if (!text) return;
     try {
-      chrome.runtime.sendMessage({ type: 'hanzo-ask', text });
+      try { chrome.runtime.sendMessage({ type: 'hanzo-ask', text }).catch(() => {}); } catch (e) { /* extensión recargada */ }
     } catch (e) {
       /* la extensión se recargó: hay que recargar la página */
     }
