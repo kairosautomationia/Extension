@@ -9,7 +9,23 @@ import ChatStream from './components/ChatStream';
 import PromptBox from './components/PromptBox';
 
 export default function App() {
-  const [mode, setMode] = useState<PermissionMode>('manual');
+  // Modo automático por defecto; se conserva hasta que el usuario cambie de módulo.
+  const [mode, setModeState] = useState<PermissionMode>(() => {
+    try {
+      const m = localStorage.getItem('hanzo.mode');
+      return m === 'manual' || m === 'auto' || m === 'readonly' ? m : 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const setMode = (m: PermissionMode) => {
+    setModeState(m);
+    try {
+      localStorage.setItem('hanzo.mode', m);
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
   const [historyOpen, setHistoryOpen] = useState(false);
   const [seed, setSeed] = useState({ text: '', n: 0 });
   const tab = useActiveTab();
