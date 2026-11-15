@@ -59,6 +59,7 @@ async function mcpPost(env: Env, body: unknown, session?: string): Promise<{ msg
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       'x-consumer-api-key': composioKey(env) as string,
+      authorization: `Bearer ${composioKey(env)}`,
       ...(session ? { 'mcp-session-id': session } : {}),
     },
     body: JSON.stringify(body),
@@ -103,7 +104,12 @@ async function handleComposio(env: Env): Promise<Response> {
     return json({ ok: true, tools: tools.length });
   } catch (e) {
     // Sin detalles técnicos: solo si falla la llave o el servicio
-    return json({ ok: false, reason: e instanceof Error && e.message === 'llave' ? 'bad-key' : 'error' });
+    // Solo las 3 primeras letras (ck_ / ak_ …) para saber qué tipo de llave se guardó; nunca la llave
+    return json(
+      e instanceof Error && e.message === 'llave'
+        ? { ok: false, reason: 'bad-key', prefix: String(composioKey(env)).slice(0, 3) }
+        : { ok: false, reason: 'error' },
+    );
   }
 }
 
