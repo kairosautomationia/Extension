@@ -4,6 +4,7 @@ import { useActiveTab } from './hooks/useActiveTab';
 import { useAgent } from './hooks/useAgent';
 import { useFlowRecorder } from './hooks/useFlowRecorder';
 import { useSelectionAsk } from './hooks/useSelectionAsk';
+import { useVoiceAgent } from './hooks/useVoiceAgent';
 import { selectionPrompt } from './lib/selection';
 import Header from './components/Header';
 import HistoryDrawer from './components/HistoryDrawer';
@@ -43,6 +44,15 @@ export default function App() {
     if (agent.running) setSeed((s) => ({ text: q, n: s.n + 1 }));
     else agent.send(q);
   });
+
+  // Agente de voz: lo que pide por voz entra al mismo chat (con las mismas aprobaciones)
+  const voice = useVoiceAgent(
+    (t) => {
+      if (agent.running) setSeed((s) => ({ text: t, n: s.n + 1 }));
+      else agent.send(t);
+    },
+    () => `Página abierta ahora: "${tab.title}" (${tab.host}).`,
+  );
 
   // Historial: cada conversación se guarda sola al terminar cada respuesta.
   const [chatId, setChatId] = useState(() => Math.random().toString(36).slice(2, 10));
@@ -101,6 +111,9 @@ export default function App() {
         onToggleRecord={rec.toggle}
         captureSignal={captureN}
         onCaptured={rec.addCapture}
+        voice={voice.state}
+        voiceError={voice.error}
+        onVoiceToggle={voice.toggle}
       />
 
       <HistoryDrawer

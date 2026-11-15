@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, AudioLines, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
+import type { VoiceState } from '../hooks/useVoiceAgent';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
@@ -46,6 +47,10 @@ interface Props {
   captureSignal?: number;
   /** Se llama cuando el usuario hizo una captura (para anotarla si se está grabando). */
   onCaptured?: () => void;
+  /** Agente de voz: estado, último error y botón. */
+  voice?: VoiceState;
+  voiceError?: { msg: string; n: number } | null;
+  onVoiceToggle?: () => void;
 }
 
 function openLink(url: string) {
@@ -56,7 +61,7 @@ function openLink(url: string) {
   }
 }
 
-export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord, captureSignal = 0, onCaptured }: Props) {
+export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord, captureSignal = 0, onCaptured, voice = 'off', voiceError = null, onVoiceToggle }: Props) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [tabLinked, setTabLinked] = useState(true);
@@ -107,6 +112,10 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
     setNotice(msg);
     setTimeout(() => setNotice(null), 5000);
   };
+  useEffect(() => {
+    if (voiceError) flash(voiceError.msg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceError]);
 
   /** Captura el área visible de la pestaña activa (no incluye el panel lateral). */
   const capture = async () => {
@@ -439,12 +448,27 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
               type="button"
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.92 }}
-              onClick={() => flash('El agente de voz estará disponible pronto.')}
-              aria-label="Agente de voz"
-              title="Agente de voz"
-              className="grid h-8 w-8 place-items-center rounded-full text-mute transition-colors hover:bg-accent-soft hover:text-accent-ink"
+              onClick={() => onVoiceToggle?.()}
+              aria-label={voice === 'off' ? 'Hablar con el agente de voz' : 'Terminar la conversación de voz'}
+              aria-pressed={voice !== 'off'}
+              title={voice === 'off' ? 'Agente de voz' : voice === 'connecting' ? 'Conectando…' : voice === 'speaking' ? 'Hanzo está hablando (pulsa para terminar)' : 'Te escucho (pulsa para terminar)'}
+              className={`relative grid h-8 w-8 place-items-center rounded-full transition-colors ${
+                voice === 'off' ? 'text-mute hover:bg-accent-soft hover:text-accent-ink' : 'bg-accent text-white'
+              }`}
             >
-              <AudioLines size={17} strokeWidth={2} />
+              {(voice === 'listening' || voice === 'speaking') && (
+                <m.span
+                  aria-hidden
+                  className="absolute inset-0 rounded-full bg-accent/40"
+                  animate={{ scale: voice === 'speaking' ? [1, 1.7, 1] : [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+                  transition={{ duration: voice === 'speaking' ? 0.9 : 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              )}
+              {voice === 'connecting' ? (
+                <Loader2 size={16} className="relative animate-spin" />
+              ) : (
+                <AudioLines size={17} strokeWidth={2} className="relative" />
+              )}
             </m.button>
 
             {running ? (
