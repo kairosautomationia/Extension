@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { Bookmark, Check, ChevronDown, Eye, Menu, Play, Plus, ShieldCheck, Zap } from 'lucide-react';
-import type { PermissionMode, SavedFlow } from '../types';
-import FlowList from './FlowList';
+import { Bookmark, Check, ChevronDown, Eye, ListVideo, Menu, Play, Plus, ShieldCheck, Zap } from 'lucide-react';
+import type { PermissionMode } from '../types';
 import { SHORTCUTS } from '../lib/mockData';
 import { useClickOutside } from '../hooks/useClickOutside';
 
@@ -25,28 +24,21 @@ interface Props {
   onOpenHistory: () => void;
   onNewChat: () => void;
   onRunShortcut: (prompt: string) => void;
-  onReplay: (flow: SavedFlow, actionId?: string) => void;
-  busy: boolean;
-  flows: SavedFlow[];
-  savedKey: number;
-  onDeleteFlow: (id: string) => void;
+  onOpenRecordings: () => void;
+  recCount: number;
+  recording: boolean;
 }
 
 const iconBtn =
   'grid h-8 w-8 place-items-center rounded-lg text-mute transition-colors hover:bg-bubble hover:text-ink';
 
-export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onRunShortcut, onReplay, busy, flows, savedKey, onDeleteFlow }: Props) {
+export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onRunShortcut, onOpenRecordings, recCount, recording }: Props) {
   const [modeOpen, setModeOpen] = useState(false);
   const [shortOpen, setShortOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement>(null);
   const shortRef = useRef<HTMLDivElement>(null);
   useClickOutside(modeRef, () => setModeOpen(false), modeOpen);
   useClickOutside(shortRef, () => setShortOpen(false), shortOpen);
-
-  // Al terminar una grabación, la etiqueta se abre sola para mostrar dónde quedó guardada
-  useEffect(() => {
-    if (savedKey > 0) setShortOpen(true);
-  }, [savedKey]);
 
   const current = MODES.find((m) => m.id === mode)!;
 
@@ -117,24 +109,38 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
           </AnimatePresence>
         </div>
 
+        {/* Historial de grabaciones (separado del de conversaciones) */}
+        <button
+          className={`${iconBtn} relative`}
+          onClick={onOpenRecordings}
+          aria-label={`Grabaciones (${recCount})`}
+          title="Grabaciones"
+        >
+          <ListVideo size={18} />
+          {recording ? (
+            <span className="breathe absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-red-500" />
+          ) : (
+            recCount > 0 && (
+              <m.span
+                key={recCount}
+                initial={{ scale: 0.4 }}
+                animate={{ scale: 1 }}
+                className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-onaccent"
+              >
+                {recCount}
+              </m.span>
+            )
+          )}
+        </button>
+
         {/* Atajos / tareas guardadas */}
         <div ref={shortRef} className="relative">
           <button
             className={`${iconBtn} relative`}
             onClick={() => setShortOpen((o) => !o)}
-            aria-label={`Acciones grabadas y tareas guardadas (${flows.length})`}
+            aria-label="Tareas guardadas"
           >
             <Bookmark size={17} />
-            {flows.length > 0 && (
-              <m.span
-                key={flows.length}
-                initial={{ scale: 0.4 }}
-                animate={{ scale: 1 }}
-                className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-onaccent"
-              >
-                {flows.length}
-              </m.span>
-            )}
           </button>
           <AnimatePresence>
             {shortOpen && (
@@ -142,17 +148,7 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
                 {...pop}
                 className="thin-scroll absolute right-0 top-10 z-40 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-line bg-card p-1 shadow-pop"
               >
-                <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-mute">Acciones grabadas</p>
-                <FlowList
-                  flows={flows}
-                  busy={busy}
-                  onReplay={(f, actionId) => {
-                    setShortOpen(false);
-                    onReplay(f, actionId);
-                  }}
-                  onDelete={onDeleteFlow}
-                />
-                <p className="mt-1 border-t border-line px-2 pb-1 pt-3 text-[11px] font-medium text-mute">Tareas guardadas</p>
+                <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-mute">Tareas guardadas</p>
                 {SHORTCUTS.map((s) => (
                   <button
                     key={s.id}

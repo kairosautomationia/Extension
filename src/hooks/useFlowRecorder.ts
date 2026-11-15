@@ -153,6 +153,19 @@ export function useFlowRecorder(tab: TabInfo) {
 
   const toggle = useCallback(() => (recording ? stop() : start()), [recording, start, stop]);
 
+  const renameFlow = useCallback((id: string, title: string) => {
+    setFlows((f) => {
+      const next = f.map((x) => (x.id === id ? { ...x, title } : x));
+      persistFlows(next);
+      return next;
+    });
+  }, []);
+
+  const clearFlows = useCallback(() => {
+    setFlows([]);
+    persistFlows([]);
+  }, []);
+
   const removeFlow = useCallback((id: string) => {
     setFlows((f) => {
       const next = f.filter((x) => x.id !== id);
@@ -171,5 +184,5 @@ export function useFlowRecorder(tab: TabInfo) {
     return () => clearTimeout(t);
   }, [error]);
 
-  return { recording, actions, secs, error, flows, savedKey, toggle, removeFlow, addCapture };
+  return { recording, actions, secs, error, flows, savedKey, toggle, removeFlow, renameFlow, clearFlows, addCapture };
 }
