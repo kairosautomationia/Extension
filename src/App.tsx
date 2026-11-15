@@ -60,7 +60,6 @@ export default function App() {
         onModeChange={setMode}
         onOpenHistory={() => setHistoryOpen(true)}
         onNewChat={newChat}
-        onRunShortcut={(p) => agent.send(p)}
         onReplay={agent.replay}
         busy={agent.running}
         flows={rec.flows}

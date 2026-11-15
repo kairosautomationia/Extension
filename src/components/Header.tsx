@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { Bookmark, Check, ChevronDown, Eye, Menu, Play, Plus, ShieldCheck, Zap } from 'lucide-react';
+import { Bookmark, Check, ChevronDown, Eye, Menu, Plus, ShieldCheck, Zap } from 'lucide-react';
 import type { PermissionMode, SavedFlow } from '../types';
 import FlowList from './FlowList';
-import { SHORTCUTS } from '../lib/mockData';
 import { useClickOutside } from '../hooks/useClickOutside';
 
 const MODES: { id: PermissionMode; label: string; desc: string; Icon: typeof Eye }[] = [
@@ -24,7 +23,6 @@ interface Props {
   onModeChange: (m: PermissionMode) => void;
   onOpenHistory: () => void;
   onNewChat: () => void;
-  onRunShortcut: (prompt: string) => void;
   onReplay: (flow: SavedFlow, actionId?: string) => void;
   busy: boolean;
   flows: SavedFlow[];
@@ -37,7 +35,7 @@ interface Props {
 const iconBtn =
   'grid h-8 w-8 place-items-center rounded-lg text-mute transition-colors hover:bg-bubble hover:text-ink';
 
-export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onRunShortcut, onReplay, busy, flows, savedKey, onDeleteFlow, onRenameFlow, onClearFlows }: Props) {
+export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onReplay, busy, flows, savedKey, onDeleteFlow, onRenameFlow, onClearFlows }: Props) {
   const [modeOpen, setModeOpen] = useState(false);
   const [shortOpen, setShortOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement>(null);
@@ -124,7 +122,7 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
           <button
             className={`${iconBtn} relative`}
             onClick={() => setShortOpen((o) => !o)}
-            aria-label={`Acciones grabadas y tareas guardadas (${flows.length})`}
+            aria-label={`Acciones grabadas (${flows.length})`}
           >
             <Bookmark size={17} />
             {flows.length > 0 && (
@@ -156,20 +154,6 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
                   onRename={onRenameFlow}
                   onClearAll={onClearFlows}
                 />
-                <p className="mt-1 border-t border-line px-2 pb-1 pt-3 text-[11px] font-medium text-mute">Tareas guardadas</p>
-                {SHORTCUTS.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setShortOpen(false);
-                      onRunShortcut(s.prompt);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg p-2 text-left text-[13px] transition-colors hover:bg-paper"
-                  >
-                    <Play size={13} className="shrink-0 text-accent" />
-                    <span className="truncate">{s.title}</span>
-                  </button>
-                ))}
               </m.div>
             )}
           </AnimatePresence>
