@@ -63,6 +63,11 @@ export function useVoiceAgent(onInstruction: (text: string) => void, context: ()
       const opts = {
         agentId: AGENT_ID,
         connectionType: 'webrtc',
+        // Los worklets de audio van como archivos de la extensión (el modo por defecto usa blob:, que la CSP bloquea)
+        workletPaths: {
+          rawAudioProcessor: chrome.runtime.getURL('worklets/rawAudioProcessor.js'),
+          audioConcatProcessor: chrome.runtime.getURL('worklets/audioConcatProcessor.js'),
+        },
         clientTools: {
           pedir_a_hanzo: async (p: { instruccion?: string; instruction?: string; text?: string }) => {
             const t = String(p?.instruccion ?? p?.instruction ?? p?.text ?? '').trim();
