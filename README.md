@@ -34,5 +34,5 @@ El sitio (vista del panel) se sirve desde `dist/` según `wrangler.jsonc`.
 
 - Build command: `npm run build`
 - Deploy command: `npx wrangler deploy`
-- El nombre del Worker en Cloudflare debe ser `hanzo` (o cambia `name` en `wrangler.jsonc`).
+- El nombre del Worker en Cloudflare debe ser `extension` (o cambia `name` en `wrangler.jsonc`).
 - Manual: `npm run deploy` (requiere `wrangler login`).
