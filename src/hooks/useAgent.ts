@@ -331,5 +331,14 @@ export function useAgent(mode: PermissionMode) {
     setMessages([]);
   }, [stop]);
 
-  return { messages, running, send, stop, resolveApproval, togglePlan, reset };
+  /** Abre una conversación guardada (detiene lo que esté en curso). */
+  const load = useCallback(
+    (list: Message[]) => {
+      stop();
+      setMessages(list);
+    },
+    [stop],
+  );
+
+  return { messages, running, send, stop, resolveApproval, togglePlan, reset, load };
 }

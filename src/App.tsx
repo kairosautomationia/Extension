@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PermissionMode } from './types';
 import { useActiveTab } from './hooks/useActiveTab';
 import { useAgent } from './hooks/useAgent';
@@ -7,6 +7,7 @@ import Header from './components/Header';
 import HistoryDrawer from './components/HistoryDrawer';
 import ChatStream from './components/ChatStream';
 import PromptBox from './components/PromptBox';
+import { saveChat, type StoredChat } from './lib/history';
 
 export default function App() {
   // Modo automático por defecto; se conserva hasta que el usuario cambie de módulo.
@@ -32,13 +33,31 @@ export default function App() {
   const agent = useAgent(mode);
   const rec = useFlowRecorder(tab);
 
+  // Historial: cada conversación se guarda sola al terminar cada respuesta.
+  const [chatId, setChatId] = useState(() => Math.random().toString(36).slice(2, 10));
+  const prevRunning = useRef(false);
+  useEffect(() => {
+    if (prevRunning.current && !agent.running && agent.messages.length > 0) saveChat(chatId, agent.messages);
+    prevRunning.current = agent.running;
+  }, [agent.running, agent.messages, chatId]);
+
+  const newId = () => Math.random().toString(36).slice(2, 10);
+  const newChat = () => {
+    agent.reset();
+    setChatId(newId());
+  };
+  const openChat = (c: StoredChat) => {
+    agent.load(c.messages);
+    setChatId(c.id);
+  };
+
   return (
     <div className="relative mx-auto flex h-dvh w-full min-w-[320px] max-w-[450px] flex-col overflow-hidden bg-paper">
       <Header
         mode={mode}
         onModeChange={setMode}
         onOpenHistory={() => setHistoryOpen(true)}
-        onNewChat={agent.reset}
+        onNewChat={newChat}
         onRunShortcut={(p) => agent.send(p)}
         flows={rec.flows}
         savedKey={rec.savedKey}
@@ -68,7 +87,16 @@ export default function App() {
         onToggleRecord={rec.toggle}
       />
 
-      <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <HistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        currentId={chatId}
+        onOpenChat={openChat}
+        onDeleted={(id) => {
+          if (id === chatId) newChat();
+        }}
+        onClearedAll={newChat}
+      />
     </div>
   );
 }

@@ -1,8 +1,46 @@
+import { useEffect, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { MessageSquare, X } from 'lucide-react';
-import { HISTORY } from '../lib/mockData';
+import { MessageSquare, Trash2, X } from 'lucide-react';
+import { clearChats, deleteChat, loadChats, whenLabel, type StoredChat } from '../lib/history';
 
-export default function HistoryDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  currentId: string;
+  onOpenChat: (chat: StoredChat) => void;
+  onDeleted: (id: string) => void;
+  onClearedAll: () => void;
+}
+
+export default function HistoryDrawer({ open, onClose, currentId, onOpenChat, onDeleted, onClearedAll }: Props) {
+  const [chats, setChats] = useState<StoredChat[]>([]);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
+
+  // Al abrir el panel se relee lo guardado (incluye la conversación actual si ya terminó un turno).
+  useEffect(() => {
+    if (!open) return;
+    setChats(loadChats());
+    setConfirmId(null);
+    setConfirmAll(false);
+  }, [open]);
+
+  const remove = (id: string) => {
+    deleteChat(id);
+    setChats(loadChats());
+    setConfirmId(null);
+    onDeleted(id);
+  };
+
+  const removeAll = () => {
+    clearChats();
+    setChats([]);
+    setConfirmAll(false);
+    onClearedAll();
+  };
+
+  const btn = 'h-7 rounded-md px-2 text-xs font-medium';
+
   return (
     <AnimatePresence>
       {open && (
@@ -33,24 +71,74 @@ export default function HistoryDrawer({ open, onClose }: { open: boolean; onClos
               </button>
             </div>
             <ul className="thin-scroll flex-1 overflow-y-auto p-2">
-              {HISTORY.length === 0 && (
+              {chats.length === 0 && (
                 <li className="px-3 py-6 text-center text-[13px] text-mute">Aún no hay conversaciones guardadas.</li>
               )}
-              {HISTORY.map((c) => (
+              {chats.map((c) => (
                 <li key={c.id}>
-                  <button
-                    onClick={onClose}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-bubble"
-                  >
-                    <MessageSquare size={15} className="shrink-0 text-mute" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px]">{c.title}</span>
-                      <span className="block text-[11px] text-mute">{c.when}</span>
-                    </span>
-                  </button>
+                  {confirmId === c.id ? (
+                    <div className="flex items-center gap-2 rounded-lg bg-bubble px-2.5 py-2">
+                      <span className="min-w-0 flex-1 truncate text-[13px]">¿Eliminar «{c.title}»?</span>
+                      <button onClick={() => remove(c.id)} className={`${btn} bg-accent text-onaccent hover:bg-accent-hover`}>
+                        Sí
+                      </button>
+                      <button onClick={() => setConfirmId(null)} className={`${btn} border border-line hover:bg-paper`}>
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className={`group flex items-center rounded-lg transition-colors hover:bg-bubble ${
+                        c.id === currentId ? 'bg-bubble' : ''
+                      }`}
+                    >
+                      <button
+                        onClick={() => {
+                          onOpenChat(c);
+                          onClose();
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
+                      >
+                        <MessageSquare size={15} className="shrink-0 text-mute" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px]">{c.title}</span>
+                          <span className="block text-[11px] text-mute">{whenLabel(c.updatedAt)}</span>
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setConfirmId(c.id)}
+                        aria-label={`Eliminar conversación ${c.title}`}
+                        className="mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-mute hover:bg-paper hover:text-ink"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
+            {chats.length > 0 && (
+              <div className="border-t border-line p-2">
+                {confirmAll ? (
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="flex-1 text-[13px]">¿Eliminar todas?</span>
+                    <button onClick={removeAll} className={`${btn} bg-accent text-onaccent hover:bg-accent-hover`}>
+                      Sí
+                    </button>
+                    <button onClick={() => setConfirmAll(false)} className={`${btn} border border-line hover:bg-bubble`}>
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmAll(true)}
+                    className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-xs font-medium text-mute hover:bg-bubble hover:text-ink"
+                  >
+                    <Trash2 size={13} /> Eliminar todas
+                  </button>
+                )}
+              </div>
+            )}
           </m.aside>
         </>
       )}

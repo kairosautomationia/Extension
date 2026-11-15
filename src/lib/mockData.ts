@@ -1,4 +1,4 @@
-import type { Conversation, TabInfo } from '../types';
+import type { TabInfo } from '../types';
 
 export const MOCK_TAB: TabInfo = {
   title: 'Pestaña actual',
@@ -18,7 +18,6 @@ export const SHORTCUTS = [
   { id: 's3', title: 'Redactar respuesta a lo que veo', prompt: 'Redacta una respuesta corta y directa al mensaje o correo que veo en esta página' },
 ];
 
-export const HISTORY: Conversation[] = [];
 
 export const MODELS = [
   { id: 'pro', label: 'Modelo Pro', hint: 'Máxima calidad' },
