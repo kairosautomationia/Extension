@@ -12,16 +12,22 @@
   const root = host.attachShadow({ mode: 'closed' });
   root.innerHTML =
     '<style>' +
-    'button{all:initial;display:flex;align-items:center;gap:6px;cursor:pointer;box-sizing:border-box;height:30px;padding:0 12px 0 9px;' +
+    '.w{position:relative;display:block;animation:in .14s ease-out}.w.dn{animation-name:ind}' +
+    '@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}' +
+    '@keyframes ind{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}' +
+    '.ar{position:absolute;left:var(--ax,50%);width:10px;height:10px;margin-left:-5px;background:#1E3A5F;transform:rotate(45deg);border-radius:2px;bottom:-4px}' +
+    '.w.dn .ar{bottom:auto;top:-4px}' +
+    'button{all:initial;position:relative;display:flex;align-items:center;gap:6px;cursor:pointer;box-sizing:border-box;height:30px;padding:0 12px 0 9px;' +
     'border-radius:999px;background:#1E3A5F;color:#fff;font:600 12.5px/1 system-ui,-apple-system,Segoe UI,sans-serif;' +
     'box-shadow:0 6px 18px rgba(15,28,58,.35),0 1px 3px rgba(15,28,58,.25);white-space:nowrap;user-select:none}' +
     'button:hover{background:#2c5282}button:focus-visible{outline:2px solid #96b8ee;outline-offset:2px}' +
     '</style>' +
-    '<button type="button" aria-label="Preguntar a Hanzo">' +
+    '<div class="w"><span class="ar"></span><button type="button" aria-label="Preguntar a Hanzo">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>' +
-    '<span>Preguntar a Hanzo</span></button>';
+    '<span>Preguntar a Hanzo</span></button></div>';
   const btn = root.querySelector('button');
+  const wrap = root.querySelector('.w');
   let current = '';
 
   const hide = () => {
@@ -42,11 +48,19 @@
     current = text.slice(0, 1000);
     if (!host.isConnected) document.documentElement.appendChild(host);
     host.style.display = 'block';
-    const w = 160;
-    const h = 30;
-    let left = Math.min(Math.max(8, rect.right - w / 2), window.innerWidth - w - 8);
-    let top = rect.bottom + 8;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 8);
+    const w = btn.offsetWidth || 160;
+    const h = btn.offsetHeight || 30;
+    const gap = 12;
+    // Se ancla a la primera línea de la selección y se coloca ARRIBA; abajo solo si no hay espacio
+    const rects = sel.getRangeAt(0).getClientRects();
+    const first = rects.length ? rects[0] : rect;
+    const cx = first.left + Math.min(first.width, 140) / 2;
+    const left = Math.min(Math.max(10, cx - w / 2), window.innerWidth - w - 10);
+    let top = first.top - h - gap;
+    const below = top < 10;
+    if (below) top = rect.bottom + gap;
+    wrap.classList.toggle('dn', below);
+    wrap.style.setProperty('--ax', Math.round(Math.min(Math.max(18, cx - left), w - 18)) + 'px');
     host.style.left = Math.round(left) + 'px';
     host.style.top = Math.round(top) + 'px';
   };
