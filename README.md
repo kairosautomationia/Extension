@@ -105,5 +105,5 @@ Cada grabación es un **flujo** con nombre, para qué sirve y etiquetas.
 ## Grupo de pestañas "Hanzo"
 
 Al abrir el panel, la pestaña activa pasa a un grupo azul llamado **Hanzo** (permiso `tabGroups`). Con clic en el nombre del
-grupo, Chrome ofrece nueva pestaña en el grupo, desagrupar, cerrar o eliminar el grupo. No toca pestañas fijadas ni las que ya
+grupo, Chrome ofrece nueva pestaña en el grupo, desagrupar, cerrar o eliminar el grupo. Al cerrar el panel el grupo se deshace solo (las pestañas siguen abiertas). No toca pestañas fijadas ni las que ya
 están en otro grupo. Para desactivarlo: `AGRUPAR_PESTANA = false` en `public/background.js`.
