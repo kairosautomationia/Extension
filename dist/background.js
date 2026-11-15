@@ -63,13 +63,14 @@ function agruparActiva() {
 // El panel avisa cuando se abre (conectando un puerto); se espera un instante para leer la pestaña activa ya estable.
 let panelesAbiertos = 0;
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'hanzo-panel') return;
+  if (port.name !== 'hanzo-panel' && port.name !== 'hanzo-panel-re') return;
   panelesAbiertos++;
-  setTimeout(agruparActiva, 250);
+  if (port.name === 'hanzo-panel') setTimeout(agruparActiva, 250); // en reconexiones no se reagrupa
   // Al cerrar el panel, el grupo "Hanzo" se deshace (las pestañas se quedan abiertas)
   port.onDisconnect.addListener(() => {
+    void chrome.runtime.lastError;
     panelesAbiertos = Math.max(0, panelesAbiertos - 1);
-    if (panelesAbiertos === 0) setTimeout(desagrupar, 150);
+    if (panelesAbiertos === 0) setTimeout(desagrupar, 1500); // margen para que el panel se reconecte si solo se cayó el puerto
   });
 });
 
