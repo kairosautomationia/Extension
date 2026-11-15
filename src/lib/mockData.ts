@@ -30,19 +30,3 @@ export const MODELS = [
   { id: 'balanced', label: 'Modelo Equilibrado', hint: 'Calidad y velocidad' },
   { id: 'light', label: 'Modelo Ligero', hint: 'Respuestas inmediatas' },
 ];
-
-export const FINAL_ANSWER =
-  'He completado la tarea en la pestaña actual.\n\n' +
-  'Revisé el carrito, localicé el botón de pago y, con tu aprobación, confirmé el pedido. ' +
-  'El resumen quedó así:\n\n' +
-  '- **3 artículos** en el carrito, con un total de **$142,90**.\n' +
-  '- Envío estándar seleccionado, entrega estimada en **2 a 3 días**.\n' +
-  '- No modifiqué ningún dato de tu cuenta.\n\n' +
-  'Si quieres, puedo guardar este flujo como un atajo para repetirlo la próxima vez.';
-
-export const READONLY_ANSWER =
-  'Estoy en modo **solo lectura**, así que no interactúo con la página; solo la analizo.\n\n' +
-  'Esto es lo que veo:\n\n' +
-  '- Una página de carrito con **3 artículos** y un total de **$142,90**.\n' +
-  '- Un botón principal de pago, que no pulsaré en este modo.\n\n' +
-  'Cambia a *Manual* o *Auto* si quieres que actúe sobre la página.';
