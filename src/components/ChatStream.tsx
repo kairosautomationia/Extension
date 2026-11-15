@@ -92,6 +92,7 @@ const AgentBlock = memo(function AgentBlock({
       </div>
       <div className="min-w-0 flex-1 space-y-3">
         {msg.plan && <PlanAccordion plan={msg.plan} stopped={msg.stopped} onToggle={() => onToggle(msg.id)} />}
+        {thinking && !msg.plan && !msg.approval && <p className="text-[13px] text-mute">Pensando…</p>}
         {msg.approval && <ApprovalCard approval={msg.approval} onResolve={onResolve} />}
         {msg.answer && <Prose text={msg.answer} streaming={msg.streaming} />}
         {msg.stopped && <p className="text-xs italic text-mute">Detenido por el usuario.</p>}
@@ -101,7 +102,7 @@ const AgentBlock = memo(function AgentBlock({
               {copied ? <Check size={13} className="text-accent-ink" /> : <Copy size={13} />}
               {copied ? 'Copiado' : 'Copiar'}
             </button>
-            {!msg.plan?.steps.every((s) => s.state === 'skipped') && (
+            {!!msg.plan && !msg.plan.steps.every((s) => s.state === 'skipped') && (
               <button onClick={() => setSaved(true)} disabled={saved} className={action}>
                 {saved ? <Check size={13} className="text-accent-ink" /> : <BookmarkPlus size={13} />}
                 {saved ? 'Atajo guardado' : 'Guardar como atajo'}

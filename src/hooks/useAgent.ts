@@ -84,7 +84,8 @@ export function useAgent(mode: PermissionMode) {
       setMessages((ms) => [
         ...ms,
         { id: uid(), role: 'user', text, attachments },
-        { id, role: 'agent', plan: { steps, open: true, done: false }, streaming: true },
+        // En chat normal los pasos internos van en segundo plano; solo las tareas /hacer muestran el plan.
+        { id, role: 'agent', plan: isTask ? { steps, open: true, done: false } : undefined, streaming: true },
       ]);
       setRunning(true);
 
