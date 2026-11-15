@@ -318,8 +318,8 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
             rows={2}
             placeholder="Escribe una instrucción o tarea para esta página..."
             style={{ minHeight: MIN_H, maxHeight: MAX_H, lineHeight: `${LINE}px` }}
-            className={`mirror-ta block w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-sm placeholder:text-mute/70 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
-              cmd ? 'text-transparent caret-ink' : 'text-ink'
+            className={`block w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-sm placeholder:text-mute/70 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+              cmd ? 'mirror-ta text-transparent caret-ink' : 'text-ink'
             }`}
           />
         </div>
