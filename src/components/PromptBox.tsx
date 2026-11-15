@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { ArrowUp, AudioLines, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
+import { AI_TARGETS, askInAi } from '../lib/aiLinks';
 import type { VoiceState } from '../hooks/useVoiceAgent';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
@@ -420,12 +421,21 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                   >
                     <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Abrir en una pestaña nueva</p>
                     <div className="max-h-72 space-y-0.5 overflow-y-auto pr-0.5">
-                      {BRANDS.map(({ name, url, color, d, gradient }) => (
+                      {BRANDS.map(({ name, url, color, d, gradient }) => {
+                        // Si hay texto escrito (y no es una tarea /hacer), los asistentes de IA lo reciben directamente
+                        const sendsText = !!AI_TARGETS[name] && text.trim().length > 0 && !/^\s*\//.test(text);
+                        return (
                         <button
                           key={name}
                           onClick={() => {
-                            openLink(url);
                             setSkillsOpen(false);
+                            if (sendsText) {
+                              const t = text;
+                              void askInAi(name, t).then((msg) => {
+                                if (msg) flash(msg);
+                              });
+                              setText('');
+                            } else openLink(url);
                           }}
                           className="group flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-paper"
                         >
@@ -444,9 +454,11 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                             </svg>
                           </span>
                           <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{name}</span>
+                          {sendsText && <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[10.5px] font-medium text-accent">Enviar texto</span>}
                           <ExternalLink size={13} className="shrink-0 text-mute opacity-0 transition-opacity group-hover:opacity-100" />
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   </m.div>
                 )}
