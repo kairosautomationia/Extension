@@ -210,7 +210,23 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-    if (url.pathname === '/api/status' && request.method === 'GET') return json({ ok: true, web: !!env.GEEKFLARE_KEY });
+    if (url.pathname === '/api/status' && request.method === 'GET') {
+      if (url.searchParams.get('probe') && env.GEEKFLARE_KEY) {
+        // Diagnóstico temporal: prueba la lectura de una URL fija y devuelve el estado.
+        try {
+          const r = await fetch(GEEKFLARE + '/web-scraping', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-api-key': env.GEEKFLARE_KEY },
+            body: JSON.stringify({ url: 'https://example.com', format: 'markdown' }),
+            signal: AbortSignal.timeout(25000),
+          });
+          return json({ status: r.status, body: (await r.text()).slice(0, 400) });
+        } catch (e) {
+          return json({ error: e instanceof Error ? e.message : 'error' });
+        }
+      }
+      return json({ ok: true, web: !!env.GEEKFLARE_KEY });
+    }
     if (url.pathname === '/api/act' && request.method === 'POST') return handleAct(request, env);
     if (url.pathname !== '/api/agent' || request.method !== 'POST') return json({ error: 'No encontrado' }, 404);
 
