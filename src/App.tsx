@@ -5,6 +5,7 @@ import { useAgent } from './hooks/useAgent';
 import { useFlowRecorder } from './hooks/useFlowRecorder';
 import { useSelectionAsk } from './hooks/useSelectionAsk';
 import { useVoiceAgent } from './hooks/useVoiceAgent';
+import { usePanelPresence } from './hooks/usePanelPresence';
 import { selectionPrompt } from './lib/selection';
 import Header from './components/Header';
 import HistoryDrawer from './components/HistoryDrawer';
@@ -32,6 +33,7 @@ export default function App() {
   };
   const [historyOpen, setHistoryOpen] = useState(false);
   const [seed, setSeed] = useState({ text: '', n: 0 });
+  usePanelPresence();
   const tab = useActiveTab();
   const [captureN, setCaptureN] = useState(0);
   const onCapture = useCallback(() => setCaptureN((n) => n + 1), []);

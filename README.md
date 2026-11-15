@@ -101,3 +101,9 @@ Cada grabación es un **flujo** con nombre, para qué sirve y etiquetas.
 - **Exportar / importar** en un archivo `.json` para pasar flujos a otra persona. Lo importado se valida (tipos de acción, tamaños) y recibe ids nuevos.
 - Se guardan en `localStorage` y con respaldo en `chrome.storage.local`; si uno se borra, se recupera del otro.
 - Límite: 200 flujos y 80 pasos por flujo.
+
+## Grupo de pestañas "Hanzo"
+
+Al abrir el panel, la pestaña activa pasa a un grupo azul llamado **Hanzo** (permiso `tabGroups`). Con clic en el nombre del
+grupo, Chrome ofrece nueva pestaña en el grupo, desagrupar, cerrar o eliminar el grupo. No toca pestañas fijadas ni las que ya
+están en otro grupo. Para desactivarlo: `AGRUPAR_PESTANA = false` en `public/background.js`.

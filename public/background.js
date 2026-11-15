@@ -26,3 +26,39 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch((e) => console.error(e));
   chrome.storage.session.set({ hanzoPending: { text, t: Date.now() } });
 });
+
+// Grupo de pestañas "Hanzo": al abrir el panel, la pestaña activa se mete en un grupo con ese nombre,
+// igual que hacen otros asistentes. Desde el grupo (clic en su nombre) se puede desagrupar, cerrar o eliminar.
+// Para quitar esta función basta con poner AGRUPAR_PESTANA en false.
+const AGRUPAR_PESTANA = true;
+const NOMBRE_GRUPO = 'Hanzo';
+let agrupando = null;
+
+function agruparActiva() {
+  if (!AGRUPAR_PESTANA || !chrome.tabGroups) return Promise.resolve();
+  if (agrupando) return agrupando; // evita crear dos grupos si llegan dos avisos a la vez
+  agrupando = (async () => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    // Las pestañas fijadas no se pueden agrupar; si ya está en un grupo (el de Hanzo u otro del usuario) no se toca
+    if (!tab || tab.id === undefined || tab.pinned || tab.windowId === undefined) return;
+    if (tab.groupId !== undefined && tab.groupId !== -1) return;
+    const existentes = await chrome.tabGroups.query({ windowId: tab.windowId, title: NOMBRE_GRUPO });
+    if (existentes.length > 0) {
+      await chrome.tabs.group({ tabIds: [tab.id], groupId: existentes[0].id });
+      return;
+    }
+    const groupId = await chrome.tabs.group({ tabIds: [tab.id], createProperties: { windowId: tab.windowId } });
+    await chrome.tabGroups.update(groupId, { title: NOMBRE_GRUPO, color: 'blue', collapsed: false });
+  })()
+    .catch((e) => console.error('Hanzo: no se pudo agrupar la pestaña', e))
+    .finally(() => {
+      agrupando = null;
+    });
+  return agrupando;
+}
+
+// El panel avisa cuando se abre (conectando un puerto); se espera un instante para leer la pestaña activa ya estable.
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'hanzo-panel') return;
+  setTimeout(agruparActiva, 250);
+});
