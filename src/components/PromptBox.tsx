@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
@@ -434,6 +434,18 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 )}
               </AnimatePresence>
             </div>
+
+            <m.button
+              type="button"
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              onClick={() => flash('El agente de voz estará disponible pronto.')}
+              aria-label="Agente de voz"
+              title="Agente de voz"
+              className="grid h-8 w-8 place-items-center rounded-full text-mute transition-colors hover:bg-accent-soft hover:text-accent-ink"
+            >
+              <AudioLines size={17} strokeWidth={2} />
+            </m.button>
 
             {running ? (
               <button
