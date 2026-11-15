@@ -37,3 +37,13 @@ El sitio (vista del panel) se sirve desde `dist/` según `wrangler.jsonc`.
 - Deploy command: `npx wrangler deploy`
 - El nombre del Worker en Cloudflare debe ser `extension` (o cambia `name` en `wrangler.jsonc`).
 - Manual: `npm run deploy` (requiere `wrangler login`).
+
+## Web (Geekflare)
+
+Si el Worker tiene el secreto `GEEKFLARE_KEY`, Hanzo puede **leer una URL** (si el mensaje contiene un enlace) y **buscar en internet** (mensajes que empiezan con "busca…" / "investiga…" o mencionan "en internet/la web"). Sin el secreto, esas funciones se desactivan y el chat sigue igual.
+
+```bash
+npx wrangler secret put GEEKFLARE_KEY
+```
+
+La clave nunca va en el código ni en la extensión.
