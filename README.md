@@ -27,3 +27,12 @@ Comprime el contenido de `dist/` en un `.zip` y súbelo al Chrome Web Store Deve
 
 - La lógica del agente es una simulación en `src/hooks/useAgent.ts`. Reemplaza el bucle de `send` por tu llamada real al modelo.
 - Permisos del manifest: `sidePanel`, `tabs`, `activeTab` y `<all_urls>` (necesario para la captura de pantalla).
+
+## Despliegue en Cloudflare (Workers con assets estáticos)
+
+El sitio (vista del panel) se sirve desde `dist/` según `wrangler.jsonc`.
+
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy`
+- El nombre del Worker en Cloudflare debe ser `hanzo` (o cambia `name` en `wrangler.jsonc`).
+- Manual: `npm run deploy` (requiere `wrangler login`).
