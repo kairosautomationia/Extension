@@ -1,9 +1,9 @@
 import { m, useMotionTemplate, useMotionValue } from 'framer-motion';
-import { FileText, Globe, Bot, Table2, TextCursorInput, type LucideIcon } from 'lucide-react';
+import { FileText, Globe, Bot, ScanSearch, Table2, type LucideIcon } from 'lucide-react';
 import type { TabInfo } from '../types';
 import { SUGGESTIONS } from '../lib/mockData';
 
-const ICONS: LucideIcon[] = [FileText, Table2, TextCursorInput];
+const ICONS: LucideIcon[] = [FileText, Table2, ScanSearch];
 
 const greeting = () => {
   const h = new Date().getHours();

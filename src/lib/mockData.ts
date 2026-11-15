@@ -9,7 +9,7 @@ export const MOCK_TAB: TabInfo = {
 export const SUGGESTIONS = [
   'Resumir esta página',
   'Extraer datos de la tabla',
-  'Analizar este negocio',
+  'Analizar página',
 ];
 
 export const SHORTCUTS = [
