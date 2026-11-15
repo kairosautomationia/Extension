@@ -27,7 +27,7 @@ function Pill({ label, onClick, delay }: { label: string; onClick: () => void; d
         y.set(e.clientY - r.top);
       }}
       onClick={onClick}
-      className="group relative w-full overflow-hidden rounded-full border border-line bg-card px-5 py-3.5 text-left text-[15px] font-medium shadow-sm transition-colors hover:border-accent/60"
+      className="group relative max-w-full overflow-hidden rounded-full border border-line bg-card px-4 py-2.5 text-left text-[13.5px] font-medium leading-snug shadow-sm transition-colors hover:border-accent/60"
     >
       <m.span
         aria-hidden
@@ -92,7 +92,7 @@ export default function EmptyState({ tab, onPick }: { tab: TabInfo; onPick: (t: 
       </m.div>
 
       {/* Abajo: preguntas de arranque */}
-      <div className="relative flex flex-col gap-2.5">
+      <div className="relative flex flex-col items-start gap-2">
         {SUGGESTIONS.map((s, i) => (
           <Pill key={s} label={s} delay={0.35 + i * 0.07} onClick={() => onPick(s)} />
         ))}
