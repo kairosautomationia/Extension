@@ -30,7 +30,7 @@ interface Body {
 
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'content-type',
 };
 
@@ -84,6 +84,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    if (url.pathname === '/api/status' && request.method === 'GET') return json({ ok: true, web: !!env.GEEKFLARE_KEY });
     if (url.pathname !== '/api/agent' || request.method !== 'POST') return json({ error: 'No encontrado' }, 404);
 
     let body: Body;
