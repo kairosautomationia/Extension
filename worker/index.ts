@@ -307,6 +307,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    // Filtro básico: solo la extensión (chrome-extension://) o este mismo dominio pueden usar la API desde un navegador.
+    // No es autenticación (curl puede falsear el Origin), pero corta el uso desde páginas web ajenas.
+    const origin = request.headers.get('origin');
+    if (url.pathname.startsWith('/api/') && origin && !origin.startsWith('chrome-extension://') && origin !== url.origin) {
+      return json({ error: 'Origen no permitido' }, 403);
+    }
     if (url.pathname === '/api/status' && request.method === 'GET') {
       return json({ ok: true, web: !!env.GEEKFLARE_KEY, composio: !!composioKey(env) });
     }
@@ -323,7 +329,7 @@ export default {
     if (!Array.isArray(body.messages) || body.messages.length === 0) return json({ error: 'Faltan mensajes' }, 400);
 
     const history = body.messages.slice(-12).map((m) => ({
-      role: m.role,
+      role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const), // nunca 'system' desde el cliente
       content: String(m.content ?? '').slice(0, 8000),
     }));
 
@@ -336,7 +342,8 @@ export default {
     const last = history[history.length - 1];
     const web = last.role === 'user' ? await webContext(env, last.content) : '';
     const parts: Part[] = [{ type: 'text', text: last.content + context + web }];
-    if (body.image && body.image.startsWith('data:image/')) {
+    // Imagen: máx. ~6 MB en base64 para no saturar el modelo
+    if (body.image && body.image.startsWith('data:image/') && body.image.length < 8_000_000) {
       parts.push({ type: 'image_url', image_url: { url: body.image } });
     }
 
