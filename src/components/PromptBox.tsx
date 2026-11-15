@@ -390,7 +390,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
-            <div ref={skillsRef} className="relative mr-3">
+            <div ref={skillsRef} className="relative">
               <button
                 onClick={() => setSkillsOpen((o) => !o)}
                 aria-haspopup="dialog"
