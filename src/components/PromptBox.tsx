@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, ChevronDown, CornerDownLeft, FileText, Globe, Loader2, MousePointerClick, Paperclip, Plug, Plus, RefreshCw, Square, X } from 'lucide-react';
+import { ArrowUp, Camera, ChevronDown, FileText, Globe, Loader2, MousePointerClick, Paperclip, Plug, Plus, RefreshCw, Square, X } from 'lucide-react';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
@@ -188,10 +188,6 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                   <span className="block text-[13px] font-semibold leading-tight text-blue-600 dark:text-blue-400">{c.name}</span>
                   <span className="mt-0.5 block text-xs leading-snug text-mute">{c.desc}</span>
                 </span>
-                <kbd className="flex h-6 shrink-0 items-center gap-1 rounded-md border border-line bg-card px-1.5 font-sans text-[11px] font-medium text-mute">
-                  <CornerDownLeft size={11} />
-                  Enter
-                </kbd>
               </button>
             ))}
           </m.div>
