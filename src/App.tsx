@@ -3,6 +3,8 @@ import type { PermissionMode } from './types';
 import { useActiveTab } from './hooks/useActiveTab';
 import { useAgent } from './hooks/useAgent';
 import { useFlowRecorder } from './hooks/useFlowRecorder';
+import { useSelectionAsk } from './hooks/useSelectionAsk';
+import { selectionPrompt } from './lib/selection';
 import Header from './components/Header';
 import HistoryDrawer from './components/HistoryDrawer';
 import ChatStream from './components/ChatStream';
@@ -34,6 +36,13 @@ export default function App() {
   const onCapture = useCallback(() => setCaptureN((n) => n + 1), []);
   const agent = useAgent(mode, { onCapture });
   const rec = useFlowRecorder(tab);
+
+  // "Preguntar a Hanzo" desde la burbuja de la página: se envía solo; si Hanzo está ocupado, queda escrito en el cuadro
+  useSelectionAsk((text) => {
+    const q = selectionPrompt(text);
+    if (agent.running) setSeed((s) => ({ text: q, n: s.n + 1 }));
+    else agent.send(q);
+  });
 
   // Historial: cada conversación se guarda sola al terminar cada respuesta.
   const [chatId, setChatId] = useState(() => Math.random().toString(36).slice(2, 10));

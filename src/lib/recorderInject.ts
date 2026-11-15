@@ -57,6 +57,7 @@ export function injectedStart() {
   const onClick = (e: MouseEvent) => {
     const target = e.target as Element | null;
     if (!target || !target.closest) return;
+    if (target.closest('hanzo-bubble')) return; // la burbuja de Hanzo no es una acción de la página
     const el =
       target.closest('a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=tab],[role=menuitem]') ||
       target;
