@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, ChevronDown, FileText, Globe, Loader2, MousePointerClick, Paperclip, Plug, Plus, RefreshCw, Square, X } from 'lucide-react';
+import { ArrowUp, Camera, ChevronDown, FileText, Globe, KeyRound, Loader2, MousePointerClick, Paperclip, Plus, RefreshCw, Square, X } from 'lucide-react';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
@@ -398,7 +398,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 aria-expanded={skillsOpen}
                 className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-mute hover:bg-bubble hover:text-ink"
               >
-                <Plug size={13} />
+                <KeyRound size={13} />
                 Llaves
                 <ChevronDown size={13} className={`transition-transform ${skillsOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -413,7 +413,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                     <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Conectores</p>
                     <div className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-paper">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-ink">
-                        <Plug size={17} />
+                        <KeyRound size={17} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px] font-semibold leading-tight">Composio</span>

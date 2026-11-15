@@ -27,7 +27,10 @@ interface Env {
   AI: { run(model: string, input: unknown): Promise<unknown> };
   GEEKFLARE_KEY?: string; // secreto del Worker (wrangler secret put GEEKFLARE_KEY)
   COMPOSIO_KEY?: string; // secreto del Worker: llave de Composio (empieza por ck_)
+  Composio?: string; // nombre alternativo aceptado para el mismo secreto
 }
+
+const composioKey = (env: Env) => env.COMPOSIO_KEY || env.Composio;
 
 type Part = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 interface ChatMsg {
@@ -55,7 +58,7 @@ async function mcpPost(env: Env, body: unknown, session?: string): Promise<{ msg
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
-      'x-consumer-api-key': env.COMPOSIO_KEY as string,
+      'x-consumer-api-key': composioKey(env) as string,
       ...(session ? { 'mcp-session-id': session } : {}),
     },
     body: JSON.stringify(body),
@@ -94,7 +97,7 @@ async function composioTools(env: Env): Promise<string[]> {
 }
 
 async function handleComposio(env: Env): Promise<Response> {
-  if (!env.COMPOSIO_KEY) return json({ ok: false, reason: 'no-key' });
+  if (!composioKey(env)) return json({ ok: false, reason: 'no-key' });
   try {
     const tools = await composioTools(env);
     return json({ ok: true, tools: tools.length });
@@ -289,7 +292,7 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === '/api/status' && request.method === 'GET') {
-      return json({ ok: true, web: !!env.GEEKFLARE_KEY, composio: !!env.COMPOSIO_KEY });
+      return json({ ok: true, web: !!env.GEEKFLARE_KEY, composio: !!composioKey(env) });
     }
     if (url.pathname === '/api/composio' && request.method === 'GET') return handleComposio(env);
     if (url.pathname === '/api/act' && request.method === 'POST') return handleAct(request, env);
