@@ -318,14 +318,14 @@ export default function FlowList({
                                     ))}
                                   </span>
                                 )}
-                                <span className="mt-1 flex items-center gap-1.5 text-[11px] text-mute">
+                                <span className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-mute">
                                   <span
                                     aria-hidden
-                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                    className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${
                                       f.lastResult === 'ok' ? 'bg-emerald-500' : f.lastResult === 'fail' ? 'bg-amber-500' : 'bg-mute/40'
                                     }`}
                                   />
-                                  <span className="truncate">
+                                  <span className="min-w-0">
                                     {f.actions.length} {f.actions.length === 1 ? 'paso' : 'pasos'}
                                     {f.host ? ` · ${f.host}` : ''}
                                     {f.lastRunAt

@@ -89,3 +89,15 @@ El botón de ondas, entre **Vínculos** y enviar, abre una conversación de voz 
 - **Preguntar a Hanzo**: burbuja al seleccionar texto en una página (`public/content.js`); no aparece en bancos/pagos ni en contraseñas.
 - **Clic derecho → Hanzo**: abre el panel lateral.
 - Requiere Chrome 116 o superior.
+
+## Biblioteca de flujos (la etiqueta de arriba a la derecha)
+
+Cada grabación es un **flujo** con nombre, para qué sirve y etiquetas.
+
+- Al pulsar **Detener**, la etiqueta se abre sola con el editor para nombrar el flujo.
+- Búsqueda por nombre, uso, sitio o etiqueta, y filtro por etiquetas.
+- Cada tarjeta muestra los pasos, el sitio, cuántas veces se usó y cómo terminó la última repetición (salió bien / no terminó, con el motivo).
+- Repetir todo con un clic, o solo un paso; las aprobaciones y los límites de seguridad siguen igual.
+- **Exportar / importar** en un archivo `.json` para pasar flujos a otra persona. Lo importado se valida (tipos de acción, tamaños) y recibe ids nuevos.
+- Se guardan en `localStorage` y con respaldo en `chrome.storage.local`; si uno se borra, se recupera del otro.
+- Límite: 200 flujos y 80 pasos por flujo.
