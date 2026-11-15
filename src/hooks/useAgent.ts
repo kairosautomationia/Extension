@@ -228,14 +228,17 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               }
               bad = 0;
               const oi = addStep(`open("${target.hostname}")`, odesc.charAt(0).toUpperCase() + odesc.slice(1), 'running');
-              // Cambiar de sitio siempre pide tu aprobación, en cualquier modo
-              patch(id, (m) => ({ ...m, approval: { action: odesc, state: 'pending' } }));
-              const okOpen = await new Promise<boolean>((resolve) => {
-                approvalRef.current = resolve;
-              });
-              approvalRef.current = null;
-              check();
-              patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: okOpen ? 'approved' : 'rejected' } }));
+              // Cambiar de sitio: en Automático se hace de inmediato; en Manual pide tu aprobación
+              let okOpen = true;
+              if (getMode() !== 'auto') {
+                patch(id, (m) => ({ ...m, approval: { action: odesc, state: 'pending' } }));
+                okOpen = await new Promise<boolean>((resolve) => {
+                  approvalRef.current = resolve;
+                });
+                approvalRef.current = null;
+                check();
+                patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: okOpen ? 'approved' : 'rejected' } }));
+              }
               if (!okOpen) {
                 setStep(oi, 'skipped');
                 final = 'Rechazaste abrir esa página; detuve la tarea.';
@@ -442,6 +445,9 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         return ok;
       };
 
+      // Abrir una página: en Automático se hace de inmediato; en Manual se pide aprobación (los sitios de banca/pagos siguen bloqueados)
+      const askOpen = async (text: string) => (modeRef.current === 'auto' ? true : ask(text));
+
       let final = onlyId ? 'Listo: repetí la acción.' : 'Listo: repetí todas las acciones grabadas.';
       let completed = false;
       let began = false; // llegó a ejecutar al menos un paso
@@ -460,7 +466,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
           const aid = await activeTabId();
           check();
           if (aid !== null) {
-            if (!(await ask(`abrir ${startFirst} para empezar el flujo`))) {
+            if (!(await askOpen(`abrir ${startFirst} para empezar el flujo`))) {
               final = 'No abrí la página de inicio; detuve la repetición.';
               return;
             }
@@ -490,7 +496,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               : `Esta acción se grabó en **${startHost}**. Abre esa página y vuelve a pulsarla.`;
             return;
           }
-          if (!(await ask(`abrir ${startUrl} para empezar el flujo`))) {
+          if (!(await askOpen(`abrir ${startUrl} para empezar el flujo`))) {
             final = 'No abrí la página de inicio; detuve la repetición.';
             return;
           }
@@ -555,7 +561,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               break;
             }
             if (!now || target !== hostOf(now.url)) {
-              if (!(await ask(`abrir ${a.url}`))) {
+              if (!(await askOpen(`abrir ${a.url}`))) {
                 final = 'Rechazaste abrir otra página; detuve la repetición.';
                 setStep(i, 'skipped');
                 finished = false;

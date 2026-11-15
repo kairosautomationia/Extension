@@ -69,7 +69,7 @@ Al escribir `/` en el chat aparece la habilidad **/hacer** (Enter o Tab la inser
 2. Al **Detener**, el flujo queda guardado en la etiqueta de la esquina superior derecha.
 3. Allí, el botón ▶ repite todo el flujo en la página; tocar una acción repite solo esa.
 
-Seguridad al repetir: los datos de contraseña, tarjeta o identidad nunca se guardan ni se rellenan (te pide que los completes tú); enviar, pagar, borrar o confirmar siempre pide aprobación; no actúa en banca y pagos; se detiene si la página cambia de sitio o no encuentra el elemento; solo cambia de sitio con tu aprobación. Un botón **Detener** corta la repetición en cualquier momento.
+Seguridad al repetir: los datos de contraseña, tarjeta o identidad nunca se guardan ni se rellenan (te pide que los completes tú); enviar, pagar, borrar o confirmar siempre pide aprobación; no actúa en banca y pagos; se detiene si la página cambia de sitio o no encuentra el elemento; abrir otra página se hace de inmediato en Automático y pide aprobación en Manual. Un botón **Detener** corta la repetición en cualquier momento.
 
 ## Agente de voz (ElevenLabs)
 
