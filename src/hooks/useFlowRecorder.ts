@@ -98,14 +98,16 @@ export function useFlowRecorder(tab: TabInfo) {
 
     try {
       const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!active?.id || !/^https?:/.test(active.url ?? '')) {
-        setError('No se puede grabar en esta pestaña. Abre una página web normal (http o https).');
+      if (!active?.id) {
+        setError('No encuentro una pestaña donde grabar.');
         return;
       }
       const tabId = active.id;
       tabIdRef.current = tabId;
-      startUrlRef.current = active.url ?? '';
-      await chrome.scripting.executeScript({ target: { tabId }, func: injectedStart });
+      // Pestaña nueva o interna (chrome://newtab…): se graba igual; el flujo empieza en la primera web que abras
+      const isWeb = /^https?:/.test(active.url ?? '');
+      startUrlRef.current = isWeb ? active.url ?? '' : '';
+      if (isWeb) await chrome.scripting.executeScript({ target: { tabId }, func: injectedStart });
 
       let lastUrl = active.url ?? '';
       const onMessage = (
@@ -118,6 +120,7 @@ export function useFlowRecorder(tab: TabInfo) {
       const onUpdated = (id: number, info: chrome.tabs.TabChangeInfo, t: chrome.tabs.Tab) => {
         if (id !== tabId || info.status !== 'complete' || !t.url || t.url === lastUrl) return;
         lastUrl = t.url;
+        if (!/^https?:/.test(t.url)) return; // páginas internas del navegador: no se graban ni se puede actuar en ellas
         push({ type: 'navigate', selector: '', label: t.title ?? '', url: t.url, t: Date.now() });
         chrome.scripting.executeScript({ target: { tabId }, func: injectedStart }).catch(() => {});
       };
