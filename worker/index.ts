@@ -49,14 +49,33 @@ const CORS = {
 const GEEKFLARE = 'https://api.geekflare.com';
 
 async function geekflare(env: Env, path: string, payload: unknown): Promise<unknown> {
-  const r = await fetch(GEEKFLARE + path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': env.GEEKFLARE_KEY as string },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(25000),
-  });
+  const call = () =>
+    fetch(GEEKFLARE + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': env.GEEKFLARE_KEY as string },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(25000),
+    });
+  let r = await call();
+  if (r.status === 429) {
+    // Plan gratuito: 1 solicitud por segundo; un solo reintento.
+    await new Promise((res) => setTimeout(res, 1500));
+    r = await call();
+  }
   if (!r.ok) throw new Error(`servicio web ${r.status}`);
   return (await r.json()) as { data?: unknown };
+}
+
+/** El contenido puede venir como texto o como objeto por formato ({ markdown: '…' }). */
+function pageText(data: unknown): string {
+  if (typeof data === 'string') return data;
+  if (data && typeof data === 'object') {
+    const o = data as Record<string, unknown>;
+    for (const k of ['markdown', 'markdown-filtered', 'text', 'html']) if (typeof o[k] === 'string') return o[k] as string;
+    const first = Object.values(o).find((v) => typeof v === 'string');
+    if (typeof first === 'string') return first;
+  }
+  return JSON.stringify(data ?? '');
 }
 
 const URL_RE = /https?:\/\/[^\s<>"')\]]+/i;
@@ -68,8 +87,8 @@ async function webContext(env: Env, text: string): Promise<string> {
   try {
     const m = text.match(URL_RE);
     if (m) {
-      const res = (await geekflare(env, '/web-scraping', { url: m[0], format: 'markdown', renderJS: true, blockAds: true })) as { data?: unknown };
-      const d = typeof res.data === 'string' ? res.data : JSON.stringify(res.data ?? '');
+      const res = (await geekflare(env, '/webscraping', { url: m[0], format: 'markdown', renderJS: true, blockAds: true })) as { data?: unknown };
+      const d = pageText(res.data);
       return `\n\n[Contenido leído de ${m[0]}]\n${d.slice(0, 14000)}`;
     }
     if (SEARCH_RE.test(text)) {
@@ -211,25 +230,6 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === '/api/status' && request.method === 'GET') {
-      if (url.searchParams.get('probe') && env.GEEKFLARE_KEY) {
-        // Diagnóstico temporal: prueba rutas candidatas de lectura de URL y devuelve el estado de cada una.
-        const out: Record<string, unknown> = {};
-        for (const path of ['/webscraping', '/web-scrape', '/scraping']) {
-          await new Promise((res) => setTimeout(res, 2500)); // plan gratuito: 1 solicitud por segundo
-          try {
-            const r = await fetch(GEEKFLARE + path, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json', 'x-api-key': env.GEEKFLARE_KEY },
-              body: JSON.stringify({ url: 'https://example.com', format: 'markdown' }),
-              signal: AbortSignal.timeout(20000),
-            });
-            out[path] = r.status + ' ' + (await r.text()).slice(0, 300);
-          } catch (e) {
-            out[path] = e instanceof Error ? e.message : 'error';
-          }
-        }
-        return json(out);
-      }
       return json({ ok: true, web: !!env.GEEKFLARE_KEY });
     }
     if (url.pathname === '/api/act' && request.method === 'POST') return handleAct(request, env);
