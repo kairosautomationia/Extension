@@ -66,5 +66,14 @@ export interface SavedFlow {
   createdAt: number;
   /** Página donde empezó la grabación. */
   startUrl?: string;
+  /** Para qué sirve el flujo (lo escribe el usuario). */
+  description?: string;
+  /** Etiquetas para encontrarlo rápido. */
+  tags?: string[];
+  /** Cuántas veces se repitió completo y cómo terminó la última vez. */
+  runs?: number;
+  lastRunAt?: number;
+  lastResult?: 'ok' | 'fail';
+  lastNote?: string;
   actions: RecordedAction[];
 }

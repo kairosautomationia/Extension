@@ -28,16 +28,19 @@ interface Props {
   flows: SavedFlow[];
   savedKey: number;
   onDeleteFlow: (id: string) => void;
-  onRenameFlow: (id: string, title: string) => void;
+  onUpdateFlow: (id: string, patch: { title?: string; description?: string; tags?: string[] }) => void;
   onClearFlows: () => void;
+  onImportFlows: (list: SavedFlow[]) => number;
+  lastSavedId: string | null;
 }
 
 const iconBtn =
   'grid h-8 w-8 place-items-center rounded-lg text-mute transition-colors hover:bg-bubble hover:text-ink';
 
-export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onReplay, busy, flows, savedKey, onDeleteFlow, onRenameFlow, onClearFlows }: Props) {
+export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, onReplay, busy, flows, savedKey, lastSavedId, onDeleteFlow, onUpdateFlow, onClearFlows, onImportFlows }: Props) {
   const [modeOpen, setModeOpen] = useState(false);
   const [shortOpen, setShortOpen] = useState(false);
+  const [nameId, setNameId] = useState<string | null>(null);
   const modeRef = useRef<HTMLDivElement>(null);
   const shortRef = useRef<HTMLDivElement>(null);
   useClickOutside(modeRef, () => setModeOpen(false), modeOpen);
@@ -45,7 +48,11 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
 
   // Al terminar una grabación, la etiqueta se abre sola para mostrar dónde quedó guardada
   useEffect(() => {
-    if (savedKey > 0) setShortOpen(true);
+    if (savedKey > 0) {
+      setNameId(lastSavedId);
+      setShortOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedKey]);
 
   const current = MODES.find((m) => m.id === mode)!;
@@ -122,7 +129,8 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
           <button
             className={`${iconBtn} relative`}
             onClick={() => setShortOpen((o) => !o)}
-            aria-label={`Acciones grabadas (${flows.length})`}
+            aria-label={`Biblioteca de flujos (${flows.length})`}
+            title="Biblioteca de flujos"
           >
             <Bookmark size={17} />
             {flows.length > 0 && (
@@ -140,19 +148,21 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
             {shortOpen && (
               <m.div
                 {...pop}
-                className="thin-scroll absolute right-0 top-10 z-40 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-line bg-card p-1 shadow-pop"
+                className="thin-scroll absolute right-0 top-10 z-40 max-h-[75vh] w-80 overflow-y-auto rounded-xl border border-line bg-card p-1 shadow-pop"
               >
-                <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-mute">Acciones grabadas</p>
                 <FlowList
                   flows={flows}
                   busy={busy}
+                  nameId={nameId}
+                  onNamed={() => setNameId(null)}
                   onReplay={(f, actionId) => {
                     setShortOpen(false);
                     onReplay(f, actionId);
                   }}
                   onDelete={onDeleteFlow}
-                  onRename={onRenameFlow}
+                  onUpdate={onUpdateFlow}
                   onClearAll={onClearFlows}
+                  onImport={onImportFlows}
                 />
               </m.div>
             )}

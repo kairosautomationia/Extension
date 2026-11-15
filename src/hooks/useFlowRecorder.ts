@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RecordedAction, SavedFlow, TabInfo } from '../types';
 import { injectedStart, injectedStop } from '../lib/recorderInject';
-import { loadFlows, persistFlows } from '../lib/flows';
+import { cleanTags, loadFlows, MAX_FLOWS, persistFlows, restoreFlows } from '../lib/flows';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const MAX_RECORDED = 80; // tope de acciones por grabación
@@ -22,7 +22,10 @@ export function useFlowRecorder(tab: TabInfo) {
   const [error, setError] = useState<string | null>(null);
   const [flows, setFlows] = useState<SavedFlow[]>(loadFlows);
   const [savedKey, setSavedKey] = useState(0); // sube cada vez que se guarda un flujo
+  const flowsRef = useRef<SavedFlow[]>([]);
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null); // el flujo recién grabado (para nombrarlo)
 
+  flowsRef.current = flows;
   const actionsRef = useRef<RecordedAction[]>([]);
   const tabIdRef = useRef<number | null>(null);
   const cleanupRef = useRef<() => void>(() => {});
@@ -31,6 +34,26 @@ export function useFlowRecorder(tab: TabInfo) {
   const recordingRef = useRef(false);
   recordingRef.current = recording;
   const startUrlRef = useRef('');
+
+  /** Aplica un cambio a la biblioteca y la guarda; avisa si no se pudo guardar. */
+  const commit = useCallback((fn: (f: SavedFlow[]) => SavedFlow[]) => {
+    setFlows((f) => {
+      const next = fn(f);
+      if (!persistFlows(next)) setError('No se pudo guardar la biblioteca (almacenamiento lleno). Elimina flujos que ya no uses.');
+      return next;
+    });
+  }, []);
+
+  // Si el almacenamiento rápido está vacío pero hay respaldo del navegador, se recupera
+  useEffect(() => {
+    let alive = true;
+    void restoreFlows().then((list) => {
+      if (alive && list.length > 0) setFlows((cur) => (cur.length === 0 ? list : cur));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const push = useCallback((a: Omit<RecordedAction, 'id'>) => {
     const list = actionsRef.current;
@@ -137,13 +160,10 @@ export function useFlowRecorder(tab: TabInfo) {
       startUrl: startUrlRef.current || list[0]?.url,
       actions: list,
     };
-    setFlows((f) => {
-      const next = [flow, ...f];
-      persistFlows(next);
-      return next;
-    });
+    commit((f) => [flow, ...f].slice(0, MAX_FLOWS));
+    setLastSavedId(flow.id);
     setSavedKey((k) => k + 1);
-  }, []);
+  }, [commit]);
 
   /** Una captura de pantalla hecha mientras se graba cuenta como una acción más. */
   const addCapture = useCallback(() => {
@@ -153,26 +173,58 @@ export function useFlowRecorder(tab: TabInfo) {
 
   const toggle = useCallback(() => (recording ? stop() : start()), [recording, start, stop]);
 
-  const renameFlow = useCallback((id: string, title: string) => {
-    setFlows((f) => {
-      const next = f.map((x) => (x.id === id ? { ...x, title } : x));
-      persistFlows(next);
-      return next;
-    });
-  }, []);
+  /** Cambia el nombre, la descripción o las etiquetas de un flujo. */
+  const updateFlow = useCallback(
+    (id: string, patch: { title?: string; description?: string; tags?: string[] }) => {
+      commit((f) =>
+        f.map((x) => {
+          if (x.id !== id) return x;
+          const next = { ...x };
+          if (patch.title !== undefined) next.title = patch.title.trim().slice(0, 60) || x.title;
+          if (patch.description !== undefined) {
+            const d = patch.description.trim().slice(0, 140);
+            if (d) next.description = d;
+            else delete next.description;
+          }
+          if (patch.tags !== undefined) {
+            const t = cleanTags(patch.tags);
+            if (t.length) next.tags = t;
+            else delete next.tags;
+          }
+          return next;
+        }),
+      );
+    },
+    [commit],
+  );
 
-  const clearFlows = useCallback(() => {
-    setFlows([]);
-    persistFlows([]);
-  }, []);
+  /** Anota cómo terminó la última repetición completa de un flujo. */
+  const markRun = useCallback(
+    (id: string, result: 'ok' | 'fail', note?: string) => {
+      commit((f) =>
+        f.map((x) =>
+          x.id === id
+            ? { ...x, runs: (x.runs ?? 0) + 1, lastRunAt: Date.now(), lastResult: result, lastNote: result === 'fail' ? (note ?? '').slice(0, 200) : undefined }
+            : x,
+        ),
+      );
+    },
+    [commit],
+  );
 
-  const removeFlow = useCallback((id: string) => {
-    setFlows((f) => {
-      const next = f.filter((x) => x.id !== id);
-      persistFlows(next);
-      return next;
-    });
-  }, []);
+  /** Suma flujos importados a la biblioteca. Devuelve cuántos entraron. */
+  const importFlows = useCallback(
+    (list: SavedFlow[]) => {
+      const take = list.slice(0, Math.max(0, MAX_FLOWS - flowsRef.current.length));
+      if (take.length > 0) commit((cur) => [...take, ...cur].slice(0, MAX_FLOWS));
+      return take.length;
+    },
+    [commit],
+  );
+
+  const clearFlows = useCallback(() => commit(() => []), [commit]);
+
+  const removeFlow = useCallback((id: string) => commit((f) => f.filter((x) => x.id !== id)), [commit]);
 
   // Si el panel se cierra grabando, se limpia
   useEffect(() => () => cleanupRef.current(), []);
@@ -184,5 +236,5 @@ export function useFlowRecorder(tab: TabInfo) {
     return () => clearTimeout(t);
   }, [error]);
 
-  return { recording, actions, secs, error, flows, savedKey, toggle, removeFlow, renameFlow, clearFlows, addCapture };
+  return { recording, actions, secs, error, flows, savedKey, lastSavedId, toggle, removeFlow, updateFlow, markRun, importFlows, clearFlows, addCapture };
 }

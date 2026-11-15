@@ -35,7 +35,7 @@ const READ_STEPS: Omit<PlanStep, 'id' | 'state'>[] = [
  * - "/hacer <tarea>": bucle de acciones (clic, escribir, desplazar) en la pestaña activa, de a UNA acción,
  *   con aprobación según el modo, campos sensibles bloqueados, tope de pasos y botón Detener.
  */
-export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } = {}) {
+export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; onFlowRun?: (flowId: string, result: 'ok' | 'fail', note?: string) => void } = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [running, setRunning] = useState(false);
   const cancelRef = useRef({ cancelled: false });
@@ -46,6 +46,8 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
   const modeRef = useRef<PermissionMode>(mode);
   const onCaptureRef = useRef(opts.onCapture);
   onCaptureRef.current = opts.onCapture;
+  const onFlowRunRef = useRef(opts.onFlowRun);
+  onFlowRunRef.current = opts.onFlowRun;
 
   messagesRef.current = messages;
   modeRef.current = mode;
@@ -442,6 +444,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
 
       let final = onlyId ? 'Listo: repetí la acción.' : 'Listo: repetí todas las acciones grabadas.';
       let completed = false;
+      let began = false; // llegó a ejecutar al menos un paso
       let wasCancelled = false;
       let tabId: number | null = null;
       try {
@@ -509,6 +512,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
           const prev = i > 0 ? list[i - 1] : undefined;
           const desc = describeRecorded(a);
           setStep(i, 'running');
+          began = true;
 
           const cur = await tabState(tid);
           check();
@@ -655,6 +659,8 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void } 
       } finally {
         if (tabId !== null) inTab(tabId, injectedClear, []).catch(() => {});
         if (!wasCancelled) {
+          // Solo cuenta la repetición completa del flujo (no un paso suelto) y solo si no la cancelaste
+          if (!onlyId && began) onFlowRunRef.current?.(flow.id, completed ? 'ok' : 'fail', completed ? undefined : final.replace(/\*\*/g, ''));
           patch(id, (m) => ({
             ...m,
             answer: final,

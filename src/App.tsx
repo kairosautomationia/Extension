@@ -35,8 +35,8 @@ export default function App() {
   const tab = useActiveTab();
   const [captureN, setCaptureN] = useState(0);
   const onCapture = useCallback(() => setCaptureN((n) => n + 1), []);
-  const agent = useAgent(mode, { onCapture });
   const rec = useFlowRecorder(tab);
+  const agent = useAgent(mode, { onCapture, onFlowRun: rec.markRun });
 
   // "Preguntar a Hanzo" desde la burbuja de la página: se envía solo; si Hanzo está ocupado, queda escrito en el cuadro
   useSelectionAsk((text) => {
@@ -84,9 +84,11 @@ export default function App() {
         busy={agent.running}
         flows={rec.flows}
         savedKey={rec.savedKey}
+        lastSavedId={rec.lastSavedId}
         onDeleteFlow={rec.removeFlow}
-        onRenameFlow={rec.renameFlow}
+        onUpdateFlow={rec.updateFlow}
         onClearFlows={rec.clearFlows}
+        onImportFlows={rec.importFlows}
       />
 
       <main className="thin-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
