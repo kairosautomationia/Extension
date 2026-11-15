@@ -420,7 +420,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                   >
                     <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Abrir en una pestaña nueva</p>
                     <div className="max-h-72 space-y-0.5 overflow-y-auto pr-0.5">
-                      {BRANDS.map(({ name, url, color, d }) => (
+                      {BRANDS.map(({ name, url, color, d, gradient }) => (
                         <button
                           key={name}
                           onClick={() => {
@@ -430,7 +430,16 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                           className="group flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-paper"
                         >
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white shadow-sm ring-1 ring-black/5">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill={color} aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill={gradient ? `url(#g-${name})` : color} aria-hidden="true">
+                              {gradient && (
+                                <defs>
+                                  <linearGradient id={`g-${name}`} x1="0" y1="0" x2="1" y2="1">
+                                    {gradient.map((c, i) => (
+                                      <stop key={c} offset={i / (gradient.length - 1)} stopColor={c} />
+                                    ))}
+                                  </linearGradient>
+                                </defs>
+                              )}
                               <path d={d} />
                             </svg>
                           </span>
