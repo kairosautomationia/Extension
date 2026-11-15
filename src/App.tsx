@@ -49,7 +49,11 @@ export default function App() {
 
   // Agente de voz: lo que pide por voz entra al mismo chat (con las mismas aprobaciones)
   const voice = useVoiceAgent(
-    (t) => {
+    (raw) => {
+      // Lo que pide la voz con verbo de acción (abrir, buscar, escribir, pulsar…) va como tarea "/hacer";
+      // el resto es conversación normal. Las aprobaciones (abrir otro sitio, enviar, pagar…) se mantienen igual.
+      const accion = /^\s*(abr[eiíoa]\w*|ve\b|ir\b|vamos|entra\w*|navega\w*|busca\w*|escribe\w*|teclea\w*|pulsa\w*|haz\b|hac[eé]\b|click\w*|clic\w*|selecciona\w*|desplaza\w*|baja\b|sube\b|rellena\w*|llena\w*|cierra\w*|reproduce\w*|pon\b|pone\b)/i;
+      const t = /^\s*\//.test(raw) || !accion.test(raw) ? raw : `/hacer ${raw.trim()}`;
       if (agent.running) setSeed((s) => ({ text: t, n: s.n + 1 }));
       else agent.send(t);
     },
