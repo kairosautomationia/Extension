@@ -26,6 +26,7 @@ const systemPrompt = (webOn: boolean) => SYSTEM_BASE.replace('__WEB__', webOn ? 
 interface Env {
   AI: { run(model: string, input: unknown): Promise<unknown> };
   GEEKFLARE_KEY?: string; // secreto del Worker (wrangler secret put GEEKFLARE_KEY)
+  COMPOSIO_KEY?: string; // secreto del Worker: llave de Composio (empieza por ck_)
 }
 
 type Part = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
@@ -44,6 +45,64 @@ const CORS = {
   'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'content-type',
 };
+
+// ---------- Conector Composio (MCP por HTTP): comprobar la conexión y listar funciones ----------
+const COMPOSIO_MCP = 'https://connect.composio.dev/mcp';
+
+async function mcpPost(env: Env, body: unknown, session?: string): Promise<{ msg: { result?: { tools?: { name: string }[] }; error?: unknown } | null; session?: string }> {
+  const r = await fetch(COMPOSIO_MCP, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'x-consumer-api-key': env.COMPOSIO_KEY as string,
+      ...(session ? { 'mcp-session-id': session } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (r.status === 401 || r.status === 403) throw new Error('llave');
+  if (!r.ok) throw new Error(`conector ${r.status}`);
+  const text = await r.text();
+  let msg: { result?: { tools?: { name: string }[] }; error?: unknown } | null = null;
+  if ((r.headers.get('content-type') || '').includes('text/event-stream')) {
+    for (const line of text.split('\n')) {
+      if (!line.startsWith('data:')) continue;
+      try {
+        msg = JSON.parse(line.slice(5).trim());
+      } catch {
+        /* fragmento incompleto */
+      }
+    }
+  } else if (text.trim()) {
+    msg = JSON.parse(text);
+  }
+  if (msg?.error) throw new Error('conector');
+  return { msg, session: r.headers.get('mcp-session-id') ?? session };
+}
+
+async function composioTools(env: Env): Promise<string[]> {
+  const init = await mcpPost(env, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'hanzo', version: '0.1' } },
+  });
+  await mcpPost(env, { jsonrpc: '2.0', method: 'notifications/initialized' }, init.session);
+  const list = await mcpPost(env, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, init.session);
+  return (list.msg?.result?.tools ?? []).map((t) => t.name);
+}
+
+async function handleComposio(env: Env): Promise<Response> {
+  if (!env.COMPOSIO_KEY) return json({ ok: false, reason: 'no-key' });
+  try {
+    const tools = await composioTools(env);
+    return json({ ok: true, tools: tools.length });
+  } catch (e) {
+    // Sin detalles técnicos: solo si falla la llave o el servicio
+    return json({ ok: false, reason: e instanceof Error && e.message === 'llave' ? 'bad-key' : 'error' });
+  }
+}
 
 // ---------- Web (Geekflare): leer URLs y buscar en internet ----------
 const GEEKFLARE = 'https://api.geekflare.com';
@@ -230,8 +289,9 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === '/api/status' && request.method === 'GET') {
-      return json({ ok: true, web: !!env.GEEKFLARE_KEY });
+      return json({ ok: true, web: !!env.GEEKFLARE_KEY, composio: !!env.COMPOSIO_KEY });
     }
+    if (url.pathname === '/api/composio' && request.method === 'GET') return handleComposio(env);
     if (url.pathname === '/api/act' && request.method === 'POST') return handleAct(request, env);
     if (url.pathname !== '/api/agent' || request.method !== 'POST') return json({ error: 'No encontrado' }, 404);
 

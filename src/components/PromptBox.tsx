@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, Check, ChevronDown, FileText, Globe, MousePointerClick, Paperclip, Plus, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, Camera, ChevronDown, CornerDownLeft, FileText, Globe, Loader2, MousePointerClick, Paperclip, Plug, Plus, RefreshCw, Square, X } from 'lucide-react';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { checkComposio, type ConnState } from '../lib/api';
 
 const LINE = 20; // px por línea (text-sm / leading-5)
 const MIN_H = LINE * 2;
@@ -12,7 +13,6 @@ const MAX_H = LINE * 6;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const SKILLS = ['Llave 1', 'Llave 2', 'Llave 3'];
 
 /** Comandos tipo skill: al escribir "/" aparecen y, una vez elegidos, se resaltan en azul. */
 const COMMANDS = [{ name: '/hacer', desc: 'Actúa en la página: clic, escribir y desplazar' }];
@@ -57,12 +57,20 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
-  const [skill, setSkill] = useState<string | null>(null);
+  const [composio, setComposio] = useState<ConnState | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const plusRef = useRef<HTMLDivElement>(null);
   const skillsRef = useRef<HTMLDivElement>(null);
   useClickOutside(plusRef, () => setPlusOpen(false), plusOpen);
   useClickOutside(skillsRef, () => setSkillsOpen(false), skillsOpen);
+  const refreshComposio = () => {
+    setComposio({ state: 'checking' });
+    void checkComposio().then(setComposio);
+  };
+  // Al abrir el menú de llaves se comprueba la conexión (una vez)
+  useEffect(() => {
+    if (skillsOpen && composio === null) refreshComposio();
+  }, [skillsOpen, composio]);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -161,9 +169,9 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
             {...menuAnim}
             role="listbox"
             aria-label="Comandos"
-            className="absolute inset-x-3 bottom-full z-40 mb-1 rounded-xl border border-line bg-card p-1 shadow-pop"
+            className="absolute inset-x-3 bottom-full z-40 mb-1 rounded-xl border border-line bg-card p-1.5 shadow-pop"
           >
-            <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-mute">Habilidades</p>
+            <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Habilidades</p>
             {menu.map((c) => (
               <button
                 key={c.name}
@@ -171,16 +179,19 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 aria-selected
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pickCommand(c.name)}
-                className="flex w-full items-center gap-2.5 rounded-lg bg-blue-500/10 p-2 text-left"
+                className="flex w-full items-center gap-3 rounded-lg bg-blue-500/10 p-2.5 text-left"
               >
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                  <MousePointerClick size={15} />
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                  <MousePointerClick size={16} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold text-blue-600 dark:text-blue-400">{c.name}</span>
-                  <span className="block truncate text-xs text-mute">{c.desc}</span>
+                  <span className="block text-[13px] font-semibold leading-tight text-blue-600 dark:text-blue-400">{c.name}</span>
+                  <span className="mt-0.5 block text-xs leading-snug text-mute">{c.desc}</span>
                 </span>
-                <span className="text-[11px] text-mute">Enter ↵</span>
+                <kbd className="flex h-6 shrink-0 items-center gap-1 rounded-md border border-line bg-card px-1.5 font-sans text-[11px] font-medium text-mute">
+                  <CornerDownLeft size={11} />
+                  Enter
+                </kbd>
               </button>
             ))}
           </m.div>
@@ -387,39 +398,60 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
             <div ref={skillsRef} className="relative">
               <button
                 onClick={() => setSkillsOpen((o) => !o)}
-                aria-haspopup="listbox"
+                aria-haspopup="dialog"
                 aria-expanded={skillsOpen}
-                className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium text-mute hover:bg-bubble hover:text-ink"
+                className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-mute hover:bg-bubble hover:text-ink"
               >
-                {skill ?? 'Llaves'}
+                <Plug size={13} />
+                Llaves
                 <ChevronDown size={13} className={`transition-transform ${skillsOpen ? 'rotate-180' : ''}`} />
               </button>
               <AnimatePresence>
                 {skillsOpen && (
-                  <m.ul
+                  <m.div
                     {...menuAnim}
-                    role="listbox"
-                    className="absolute bottom-10 right-0 z-40 w-48 rounded-xl border border-line bg-card p-1 shadow-pop"
+                    role="dialog"
+                    aria-label="Llaves y conectores"
+                    className="absolute bottom-10 right-0 z-40 w-72 rounded-xl border border-line bg-card p-1.5 shadow-pop"
                   >
-                    <li className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-mute">Llaves</li>
-                    {SKILLS.map((name) => (
-                      <li key={name}>
-                        <button
-                          role="option"
-                          aria-selected={skill === name}
-                          onClick={() => {
-                            setSkill((cur) => (cur === name ? null : name));
-                            setSkillsOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 rounded-lg p-2 text-left text-[13px] hover:bg-paper"
-                        >
-                          <Sparkles size={14} className="text-accent-ink" />
-                          <span className="flex-1">{name}</span>
-                          {skill === name && <Check size={14} className="text-accent-ink" />}
-                        </button>
-                      </li>
-                    ))}
-                  </m.ul>
+                    <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Conectores</p>
+                    <div className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-paper">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-ink">
+                        <Plug size={17} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-semibold leading-tight">Composio</span>
+                        <span className="mt-0.5 flex items-center gap-1.5 text-xs leading-snug text-mute">
+                          <span
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                              composio?.state === 'ok' ? 'bg-emerald-500' : composio?.state === 'checking' || !composio ? 'bg-mute/50' : 'bg-amber-500'
+                            }`}
+                          />
+                          {composio?.state === 'ok'
+                            ? `Conectado, ${composio.tools} funciones`
+                            : composio?.state === 'no-key'
+                              ? 'Falta la llave en el servidor'
+                              : composio?.state === 'bad-key'
+                                ? 'La llave no es válida'
+                                : composio?.state === 'error'
+                                  ? 'No se pudo conectar'
+                                  : 'Comprobando…'}
+                        </span>
+                      </span>
+                      <button
+                        onClick={refreshComposio}
+                        disabled={composio?.state === 'checking'}
+                        aria-label="Comprobar conexión de Composio"
+                        title="Comprobar conexión"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-mute hover:bg-bubble hover:text-ink disabled:opacity-60"
+                      >
+                        {composio?.state === 'checking' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                      </button>
+                    </div>
+                    <p className="px-2.5 pb-1.5 pt-1 text-[11px] leading-snug text-mute">
+                      Acceso a más de mil aplicaciones. La llave se guarda como secreto en el servidor, nunca en la extensión.
+                    </p>
+                  </m.div>
                 )}
               </AnimatePresence>
             </div>

@@ -14,6 +14,20 @@ export interface PageContext {
   text?: string;
 }
 
+export type ConnState = { state: 'checking' } | { state: 'ok'; tools: number } | { state: 'no-key' } | { state: 'bad-key' } | { state: 'error' };
+
+/** Comprueba la conexión del conector Composio a través del Worker. */
+export async function checkComposio(signal?: AbortSignal): Promise<ConnState> {
+  try {
+    const res = await fetch(`${BASE}/api/composio`, { signal });
+    const j = (await res.json()) as { ok?: boolean; tools?: number; reason?: string };
+    if (j.ok) return { state: 'ok', tools: j.tools ?? 0 };
+    return j.reason === 'no-key' ? { state: 'no-key' } : j.reason === 'bad-key' ? { state: 'bad-key' } : { state: 'error' };
+  } catch {
+    return { state: 'error' };
+  }
+}
+
 /** Lee el texto visible de la pestaña activa (solo dentro de la extensión). */
 export async function readPageContext(): Promise<PageContext | undefined> {
   try {
