@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, Camera, CalendarDays, ChevronDown, Cloud, FileText, Github, Globe, HardDrive, Link2, Mail, MessageCircle, MousePointerClick, Paperclip, Plus, Square, Workflow, X } from 'lucide-react';
+import { ArrowUp, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
+import { BRANDS } from '../lib/brands';
 import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
@@ -46,16 +47,6 @@ interface Props {
   /** Se llama cuando el usuario hizo una captura (para anotarla si se está grabando). */
   onCaptured?: () => void;
 }
-
-const LINKS = [
-  { name: 'GitHub', url: 'https://github.com', Icon: Github },
-  { name: 'Cloudflare', url: 'https://dash.cloudflare.com', Icon: Cloud },
-  { name: 'Gmail', url: 'https://mail.google.com', Icon: Mail },
-  { name: 'Drive', url: 'https://drive.google.com', Icon: HardDrive },
-  { name: 'Calendar', url: 'https://calendar.google.com', Icon: CalendarDays },
-  { name: 'Make', url: 'https://www.make.com', Icon: Workflow },
-  { name: 'WhatsApp', url: 'https://web.whatsapp.com', Icon: MessageCircle },
-] as const;
 
 function openLink(url: string) {
   try {
@@ -416,23 +407,26 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                     {...menuAnim}
                     role="dialog"
                     aria-label="Vínculos"
-                    className="absolute bottom-10 right-0 z-40 w-72 rounded-xl border border-line bg-card p-1.5 shadow-pop"
+                    className="absolute bottom-10 right-0 z-40 w-64 rounded-xl border border-line bg-card p-1.5 shadow-pop"
                   >
                     <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Abrir en una pestaña nueva</p>
-                    <div className="grid grid-cols-2 gap-1">
-                      {LINKS.map(({ name, url, Icon }) => (
+                    <div className="max-h-72 space-y-0.5 overflow-y-auto pr-0.5">
+                      {BRANDS.map(({ name, url, color, d }) => (
                         <button
                           key={name}
                           onClick={() => {
                             openLink(url);
                             setSkillsOpen(false);
                           }}
-                          className="flex items-center gap-2.5 rounded-lg p-2 text-left hover:bg-paper"
+                          className="group flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-paper"
                         >
-                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-ink">
-                            <Icon size={16} />
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white shadow-sm ring-1 ring-black/5">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill={color} aria-hidden="true">
+                              <path d={d} />
+                            </svg>
                           </span>
-                          <span className="min-w-0 truncate text-[13px] font-medium">{name}</span>
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{name}</span>
+                          <ExternalLink size={13} className="shrink-0 text-mute opacity-0 transition-opacity group-hover:opacity-100" />
                         </button>
                       ))}
                     </div>
