@@ -54,6 +54,7 @@ export default function FlowList({
   flows,
   busy,
   nameId,
+  onSeen,
   onNamed,
   onReplay,
   onUpdate,
@@ -65,6 +66,7 @@ export default function FlowList({
   busy: boolean;
   /** Flujo recién grabado: se abre su editor para ponerle nombre. */
   nameId: string | null;
+  onSeen: (id: string) => void; // el usuario señaló el flujo: desaparece el aviso de "nuevo"
   onNamed: () => void;
   onReplay: (flow: SavedFlow, actionId?: string) => void;
   onUpdate: (id: string, patch: { title?: string; description?: string; tags?: string[] }) => void;
@@ -116,6 +118,7 @@ export default function FlowList({
     if (!editId) return;
     if (!dTitle.trim()) return;
     onUpdate(editId, { title: dTitle, description: dDesc, tags: dTags.split(',') });
+    onSeen(editId);
     setEditId(null);
   };
 
@@ -301,7 +304,11 @@ export default function FlowList({
                         <>
                           <div className="flex items-start gap-0.5 rounded-lg hover:bg-paper">
                             <button
-                              onClick={() => setOpenId(open ? null : f.id)}
+                              onClick={() => {
+                                setOpenId(open ? null : f.id);
+                                onSeen(f.id);
+                                if (hintId === f.id) setHintId(null);
+                              }}
                               aria-expanded={open}
                               className="flex min-w-0 flex-1 items-start gap-2 rounded-lg p-2 text-left"
                             >

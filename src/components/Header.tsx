@@ -41,6 +41,7 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
   const [modeOpen, setModeOpen] = useState(false);
   const [shortOpen, setShortOpen] = useState(false);
   const [nameId, setNameId] = useState<string | null>(null);
+  const [unseen, setUnseen] = useState<string[]>([]); // flujos recién grabados que el usuario aún no ha señalado
   const modeRef = useRef<HTMLDivElement>(null);
   const shortRef = useRef<HTMLDivElement>(null);
   useClickOutside(modeRef, () => setModeOpen(false), modeOpen);
@@ -50,6 +51,7 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
   useEffect(() => {
     if (savedKey > 0) {
       setNameId(lastSavedId);
+      if (lastSavedId) setUnseen((u) => (u.includes(lastSavedId) ? u : [...u, lastSavedId]));
       setShortOpen(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,18 +131,18 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
           <button
             className={`${iconBtn} relative`}
             onClick={() => setShortOpen((o) => !o)}
-            aria-label={`Biblioteca de flujos (${flows.length})`}
+            aria-label={unseen.length > 0 ? `Biblioteca de flujos (${unseen.length} nuevo${unseen.length === 1 ? '' : 's'})` : 'Biblioteca de flujos'}
             title="Biblioteca de flujos"
           >
             <Bookmark size={17} />
-            {flows.length > 0 && (
+            {unseen.length > 0 && (
               <m.span
-                key={flows.length}
+                key={unseen.length}
                 initial={{ scale: 0.4 }}
                 animate={{ scale: 1 }}
                 className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-onaccent"
               >
-                {flows.length}
+                {unseen.length}
               </m.span>
             )}
           </button>
@@ -155,6 +157,7 @@ export default function Header({ mode, onModeChange, onOpenHistory, onNewChat, o
                   busy={busy}
                   nameId={nameId}
                   onNamed={() => setNameId(null)}
+                  onSeen={(id) => setUnseen((u) => u.filter((x) => x !== id))}
                   onReplay={(f, actionId) => {
                     setShortOpen(false);
                     onReplay(f, actionId);
