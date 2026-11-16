@@ -79,7 +79,6 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
   const [voiceHover, setVoiceHover] = useState(false); // la flecha aparece al acercarte al micrófono
   const [chevFlash, setChevFlash] = useState(false); // y unos segundos después de elegir un modo
-  const showChev = voiceHover || voiceMenuOpen || chevFlash;
   useEffect(() => {
     if (!chevFlash) return;
     const t = setTimeout(() => setChevFlash(false), 2200);
@@ -102,6 +101,8 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
     (fin, interim) => setText(`${dictBaseRef.current}${dictBaseRef.current ? (fin + interim).replace(/^\s+/, '') : fin + interim}`),
     (msg) => flash(msg),
   );
+  const micOn = voiceMode === 'dictado' ? dict.listening : voice !== 'off'; // micrófono encendido
+  const showChev = voiceHover || voiceMenuOpen || chevFlash || micOn;
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -425,8 +426,8 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
             {recording ? 'Detener' : 'Grabar'}
           </button>
 
-          <div className="ml-auto flex items-center gap-1.5">
-            <div ref={skillsRef} className="relative -mr-1">
+          <div className="ml-auto flex items-center gap-1">
+            <div ref={skillsRef} className="relative">
               <button
                 onClick={() => setSkillsOpen((o) => !o)}
                 aria-haspopup="dialog"
@@ -504,25 +505,29 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 {showChev && (
                   <m.span
                     aria-hidden
-                    initial={{ opacity: 0, scaleX: 0.5 }}
-                    animate={{ opacity: 1, scaleX: 1 }}
-                    exit={{ opacity: 0, scaleX: 0.5 }}
-                    transition={{ type: 'spring', stiffness: 520, damping: 32 }}
-                    style={{ originX: 1 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.08 }}
                     className="pointer-events-none absolute inset-0 rounded-xl bg-ink/[0.06]"
                   />
                 )}
               </AnimatePresence>
-              {/* El espacio de la flecha está siempre reservado: al aparecer no mueve nada */}
-              <div className="relative grid h-8 w-8 place-items-center">
+              {/* El hueco de la flecha crece al aparecer y empuja Vínculos a la izquierda; el micrófono no se mueve */}
+              <m.div
+                className="relative grid h-8 place-items-center overflow-hidden"
+                initial={false}
+                animate={{ width: showChev ? 32 : 0 }}
+                transition={{ duration: 0.1, ease: 'easeOut' }}
+              >
                 <AnimatePresence>
                   {showChev && (
                     <m.button
                       type="button"
-                      initial={{ opacity: 0, scale: 0.6, x: 16 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.6, x: 16 }}
-                      transition={{ type: 'spring', stiffness: 520, damping: 30 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.08 }}
                       onClick={() => setVoiceMenuOpen((o) => !o)}
                       aria-haspopup="menu"
                       aria-expanded={voiceMenuOpen}
@@ -534,7 +539,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                     </m.button>
                   )}
                 </AnimatePresence>
-              </div>
+              </m.div>
               <AnimatePresence>
                 {voiceMenuOpen && (
                   <m.div
@@ -607,14 +612,14 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 aria-pressed={voiceMode === 'dictado' ? dict.listening : voice !== 'off'}
                 title={voiceMode === 'dictado' ? (dict.listening ? 'Te escucho: habla y se escribe (pulsa para terminar)' : 'Dictar: voz a texto') : voice === 'off' ? 'Agente de voz' : voice === 'connecting' ? 'Conectando…' : voice === 'speaking' ? 'Hanzo está hablando (pulsa para terminar)' : 'Te escucho (pulsa para terminar)'}
                 className={`relative grid h-8 w-8 place-items-center rounded-xl transition-colors ${
-                  (voiceMode === 'dictado' ? !dict.listening : voice === 'off') ? (showChev ? 'text-ink' : 'text-mute hover:bg-accent-soft hover:text-accent-ink') : 'bg-accent text-white'
+                  (voiceMode === 'dictado' ? !dict.listening : voice === 'off') ? (showChev ? 'text-ink' : 'text-mute hover:bg-accent-soft hover:text-accent-ink') : 'text-ink'
                 }`}
               >
                 {((voiceMode === 'agente' && (voice === 'listening' || voice === 'speaking')) || (voiceMode === 'dictado' && dict.listening)) && (
                   <m.span
                     aria-hidden
-                    className="absolute inset-0 rounded-full bg-accent/40"
-                    animate={{ scale: voice === 'speaking' ? [1, 1.7, 1] : [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+                    className="absolute inset-1 rounded-lg bg-ink/[0.12]"
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.7, 0.2, 0.7] }}
                     transition={{ duration: voice === 'speaking' ? 0.9 : 1.8, repeat: Infinity, ease: 'easeInOut' }}
                   />
                 )}
