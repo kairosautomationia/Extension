@@ -239,7 +239,9 @@ export function injectedHighlight(id: number | null, text: string): boolean {
       try {
         // Si el panel ya no está abierto nadie escucha: la capa se retira sola para no quedar pegada en la página
         const p = chrome.runtime.sendMessage({ type: 'hanzo-stop' });
-        if (p && typeof p.catch === 'function') p.catch(quitar);
+        // El panel responde true; si nadie responde (panel cerrado) o falla el envío, la capa se retira
+        if (p && typeof p.then === 'function') p.then((r: unknown) => { if (!r) quitar(); }, quitar);
+        else quitar();
       } catch {
         quitar(); // extensión recargada
       }

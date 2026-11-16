@@ -747,8 +747,11 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
 
   // Botón "Detener" de la barra que Hanzo muestra en la página
   useEffect(() => {
-    const onMsg = (m: { type?: string }) => {
-      if (m?.type === 'hanzo-stop') stop();
+    const onMsg = (m: { type?: string }, _s: unknown, reply: (r: boolean) => void) => {
+      if (m?.type === 'hanzo-stop') {
+        stop();
+        reply(true); // confirma a la página que el panel sigue abierto y se encarga de limpiar
+      }
     };
     try {
       chrome.runtime.onMessage.addListener(onMsg);
