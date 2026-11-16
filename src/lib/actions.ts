@@ -135,6 +135,7 @@ export function injectedSnapshot(): Snapshot {
 
   for (const el of Array.from(nodes)) {
     if (els.length >= 60) break;
+    if (el.closest('[data-hanzo-overlay]')) continue; // la barra de Hanzo no es parte de la página
     const r = el.getBoundingClientRect();
     if (r.width < 4 || r.height < 4 || r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) continue;
     const cs = getComputedStyle(el);
@@ -186,11 +187,64 @@ export function injectedHighlight(id: number | null, text: string): boolean {
   const w = window as unknown as { __hanzoBox?: HTMLElement };
   w.__hanzoBox?.remove();
   w.__hanzoBox = undefined;
+  // Capa "Hanzo está trabajando": borde luminoso, barra con botón Detener y cursor animado
+  const u = window as unknown as { __hanzoUi?: { root: HTMLElement; cursor: HTMLElement } };
+  if (!u.__hanzoUi || !u.__hanzoUi.root.isConnected) {
+    const root = document.createElement('div');
+    root.setAttribute('data-hanzo-overlay', '1');
+    root.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none;';
+    const st = document.createElement('style');
+    st.textContent =
+      '@keyframes hz-glow{0%,100%{box-shadow:inset 0 0 0 2px rgba(74,163,255,.85),inset 0 0 28px rgba(74,163,255,.35)}50%{box-shadow:inset 0 0 0 2px rgba(74,163,255,.55),inset 0 0 14px rgba(74,163,255,.18)}}' +
+      '@keyframes hz-dot{0%,100%{opacity:1}50%{opacity:.35}}' +
+      '@keyframes hz-in{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}' +
+      '@keyframes hz-ripple{from{transform:translate(-50%,-50%) scale(.3);opacity:.9}to{transform:translate(-50%,-50%) scale(1.6);opacity:0}}';
+    root.appendChild(st);
+    const glow = document.createElement('div');
+    glow.style.cssText = 'position:absolute;inset:0;animation:hz-glow 2.4s ease-in-out infinite;';
+    root.appendChild(glow);
+    const bar = document.createElement('div');
+    bar.style.cssText =
+      'position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:999px;background:#0f1c3a;color:#fff;font:500 13px/1 system-ui,-apple-system,sans-serif;box-shadow:0 8px 28px rgba(15,28,58,.35);pointer-events:auto;animation:hz-in .18s ease-out;white-space:nowrap;';
+    const dot = document.createElement('span');
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#4aa3ff;animation:hz-dot 1.2s ease-in-out infinite;';
+    const label = document.createElement('span');
+    label.textContent = 'Hanzo está trabajando en esta página';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Detener';
+    btn.style.cssText =
+      'all:unset;cursor:pointer;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font:600 12px/1 system-ui,sans-serif;';
+    btn.onmouseenter = () => (btn.style.background = 'rgba(255,255,255,.22)');
+    btn.onmouseleave = () => (btn.style.background = 'rgba(255,255,255,.12)');
+    btn.onclick = () => {
+      try {
+        chrome.runtime.sendMessage({ type: 'hanzo-stop' })?.catch?.(() => {});
+      } catch {
+        /* extensión recargada */
+      }
+      label.textContent = 'Deteniendo…';
+    };
+    bar.append(dot, label, btn);
+    root.appendChild(bar);
+    const cursor = document.createElement('div');
+    cursor.style.cssText =
+      'position:absolute;left:' + Math.round(window.innerWidth / 2) + 'px;top:' + Math.round(window.innerHeight / 2) + 'px;width:22px;height:22px;transition:left .45s cubic-bezier(.22,.8,.3,1),top .45s cubic-bezier(.22,.8,.3,1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));';
+    cursor.innerHTML =
+      '<svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 2.5l15.5 9.2-6.9 1.5 3.9 7.1-2.8 1.5-3.9-7.1L5 19.2z" fill="#4aa3ff" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+    root.appendChild(cursor);
+    document.documentElement.appendChild(root);
+    u.__hanzoUi = { root, cursor };
+  }
+
   if (id === null) return true;
   const el = document.querySelector<HTMLElement>('[data-hanzo-id="' + id + '"]');
   if (!el) return false;
   el.scrollIntoView({ block: 'center', inline: 'center' });
   const r = el.getBoundingClientRect();
+  // El cursor de Hanzo se mueve hasta el elemento
+  u.__hanzoUi.cursor.style.left = Math.round(r.left + Math.min(r.width / 2, 40)) + 'px';
+  u.__hanzoUi.cursor.style.top = Math.round(r.top + r.height / 2) + 'px';
   const box = document.createElement('div');
   box.setAttribute('data-hanzo-overlay', '1');
   box.style.cssText =
@@ -212,9 +266,11 @@ export function injectedHighlight(id: number | null, text: string): boolean {
 
 /** Quita el recuadro y los números que Hanzo puso en la página. */
 export function injectedClear(): boolean {
-  const w = window as unknown as { __hanzoBox?: HTMLElement };
+  const w = window as unknown as { __hanzoBox?: HTMLElement; __hanzoUi?: { root: HTMLElement } };
   w.__hanzoBox?.remove();
   w.__hanzoBox = undefined;
+  w.__hanzoUi?.root.remove();
+  w.__hanzoUi = undefined;
   document.querySelectorAll('[data-hanzo-id]').forEach((e) => e.removeAttribute('data-hanzo-id'));
   return true;
 }
@@ -222,9 +278,20 @@ export function injectedClear(): boolean {
 /** Ejecuta UNA acción. Vuelve a comprobar en la página que el campo no sea sensible. */
 export function injectedAct(a: ActAction): { ok: boolean; msg: string } {
   const SENSITIVE = /(contrase|passw|clave|tarjeta|card|cvv|cvc|iban|cuenta banc|ssn|c[eé]dula|pasaporte|passport|otp|verificaci)/i;
-  const w = window as unknown as { __hanzoBox?: HTMLElement };
+  const w = window as unknown as { __hanzoBox?: HTMLElement; __hanzoUi?: { root: HTMLElement; cursor: HTMLElement } };
   w.__hanzoBox?.remove();
   w.__hanzoBox = undefined;
+  // Onda bajo el cursor de Hanzo al hacer clic o escribir
+  if (w.__hanzoUi && (a.type === 'click' || a.type === 'type')) {
+    const c = w.__hanzoUi.cursor;
+    const rip = document.createElement('div');
+    rip.style.cssText =
+      'position:absolute;width:34px;height:34px;border-radius:50%;border:2px solid #4aa3ff;background:rgba(74,163,255,.18);animation:hz-ripple .5s ease-out forwards;';
+    rip.style.left = c.style.left;
+    rip.style.top = c.style.top;
+    w.__hanzoUi.root.appendChild(rip);
+    setTimeout(() => rip.remove(), 600);
+  }
 
   if (a.type === 'scroll') {
     window.scrollBy(0, (a.dir === 'up' ? -1 : 1) * Math.round(window.innerHeight * 0.8));
