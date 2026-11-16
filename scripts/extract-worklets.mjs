@@ -3,7 +3,8 @@
 // Al sacarlos del propio bundle, el nombre/versión del worklet siempre coincide con la librería instalada.
 import fs from 'node:fs';
 const dir = 'dist/assets';
-const bundle = fs.readdirSync(dir).filter((f) => /^sidepanel-.*\.js$/.test(f));
+// La librería de voz va en su propio archivo (carga diferida): se buscan los worklets en todos los .js
+const bundle = fs.readdirSync(dir).filter((f) => /\.js$/.test(f));
 let code = '';
 for (const f of bundle) code += fs.readFileSync(`${dir}/${f}`, 'utf8');
 fs.mkdirSync('dist/worklets', { recursive: true });

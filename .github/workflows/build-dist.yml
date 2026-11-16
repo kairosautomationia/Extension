@@ -10,6 +10,11 @@ on:
 permissions:
   contents: write
 
+# Si llegan dos pushes seguidos, solo se compila el último (evita dos compilaciones pisándose al publicar dist/)
+concurrency:
+  group: build-dist
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,7 +30,7 @@ jobs:
         run: |
           git config user.name "kairos-build"
           git config user.email "kairosautomation.ia@gmail.com"
-          git add -f dist
+          git add -f dist package-lock.json
           if git diff --cached --quiet; then echo "dist sin cambios"; exit 0; fi
           git commit -m "build: actualizar dist/ [skip ci]"
           git push

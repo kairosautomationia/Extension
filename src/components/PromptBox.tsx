@@ -1,3 +1,4 @@
+import { shrinkImage } from '../lib/image';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
 import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
@@ -152,7 +153,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
     try {
       let url: string;
       if (typeof chrome !== 'undefined' && chrome.tabs?.captureVisibleTab) {
-        url = await chrome.tabs.captureVisibleTab(chrome.windows.WINDOW_ID_CURRENT, { format: 'png' });
+        url = await shrinkImage(await chrome.tabs.captureVisibleTab(chrome.windows.WINDOW_ID_CURRENT, { format: 'png' }));
       } else {
         url = PLACEHOLDER_SHOT; // solo en `vite dev`, fuera de la extensión
       }
@@ -179,7 +180,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
         setAttachments((a) => [...a, { id: uid(), kind: isImg ? 'image' : 'file', name: f.name, url }]);
       if (isImg) {
         const r = new FileReader();
-        r.onload = () => add(r.result as string);
+        r.onload = () => void shrinkImage(r.result as string).then(add);
         r.readAsDataURL(f);
       } else add();
     });

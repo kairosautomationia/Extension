@@ -357,12 +357,28 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         const ctrl = new AbortController();
         abortRef.current = ctrl;
         let acc = '';
+        // Los fragmentos llegan decenas de veces por segundo: se pintan como mucho una vez por fotograma
+        // (evita volver a dibujar todo el chat en cada fragmento y que el panel se sienta pesado).
+        let raf = 0;
+        const flush = () => {
+          raf = 0;
+          const text = acc;
+          patch(id, (m) => ({ ...m, answer: text }));
+        };
+        const cancelFlush = () => {
+          if (raf) cancelAnimationFrame(raf);
+          raf = 0;
+        };
         try {
           await streamAgent({ messages: history, page, image }, (t) => {
             acc += t;
-            patch(id, (m) => ({ ...m, answer: acc }));
+            if (!raf) raf = requestAnimationFrame(flush);
           }, ctrl.signal);
+          cancelFlush();
+          if (acc) flush();
         } catch (err) {
+          cancelFlush();
+          if (acc && token.cancelled) flush(); // al detener se conserva lo ya escrito
           check();
           const msg = err instanceof Error ? err.message : 'Error desconocido';
           acc = acc || `No pude contactar al modelo: ${msg}`;

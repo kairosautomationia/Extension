@@ -178,6 +178,30 @@ async function webContext(env: Env, text: string): Promise<string> {
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', ...CORS } });
 
+/** Traduce un fallo de Workers AI a un aviso claro para la persona (el detalle técnico queda solo en el registro del Worker). */
+function aiFailure(e: unknown): { status: number; error: string; quota: boolean } {
+  const raw = e instanceof Error ? e.message : String(e);
+  console.error('workers-ai', raw.slice(0, 300));
+  if (/4006|neurons|daily free allocation|quota|allocation/i.test(raw)) {
+    return { status: 429, quota: true, error: 'Se agotó el cupo gratuito de IA de hoy. Se renueva a las 7 pm (medianoche UTC); vuelve a intentarlo después.' };
+  }
+  if (/3040|capacity|overloaded|busy|temporar|timeout|timed out|502|503|504/i.test(raw)) {
+    return { status: 503, quota: false, error: 'El modelo está muy ocupado en este momento. Inténtalo de nuevo en unos segundos.' };
+  }
+  return { status: 502, quota: false, error: 'El modelo no pudo responder. Inténtalo de nuevo.' };
+}
+
+/** Una llamada al modelo con un solo reintento ante fallos pasajeros (nunca si se acabó el cupo). */
+async function runModel(env: Env, input: unknown): Promise<unknown> {
+  try {
+    return await env.AI.run(MODEL, input);
+  } catch (e) {
+    if (aiFailure(e).quota) throw e;
+    await new Promise((res) => setTimeout(res, 700));
+    return await env.AI.run(MODEL, input);
+  }
+}
+
 
 // ---------- Acciones sobre la página (/api/act): el modelo propone UNA acción por turno ----------
 const ACT_SYSTEM = `Eres Hanzo y controlas la pestaña activa del usuario para cumplir UNA tarea.
@@ -255,12 +279,13 @@ async function handleAct(request: Request, env: Env): Promise<Response> {
   let b: ActBody;
   try {
     b = (await request.json()) as ActBody;
+    if (!b || typeof b !== 'object') throw new Error('cuerpo');
   } catch {
     return json({ error: 'JSON inválido' }, 400);
   }
   const task = String(b.task ?? '').trim().slice(0, 1000);
   if (!task) return json({ error: 'Falta la tarea' }, 400);
-  const els = (Array.isArray(b.elements) ? b.elements : []).slice(0, 60).map((e) => ({
+  const els = (Array.isArray(b.elements) ? b.elements : []).filter((e) => e && typeof e === 'object').slice(0, 60).map((e) => ({
     id: Number(e.id),
     tag: String(e.tag ?? '').slice(0, 20),
     kind: String(e.kind ?? '').slice(0, 20),
@@ -268,7 +293,7 @@ async function handleAct(request: Request, env: Env): Promise<Response> {
     value: e.value ? String(e.value).slice(0, 40) : undefined,
     risk: e.risk === 'blocked' || e.risk === 'high' ? e.risk : ('normal' as const),
   }));
-  const history = (Array.isArray(b.history) ? b.history : []).slice(-12).map((h) => String(h).slice(0, 200));
+  const history = (Array.isArray(b.history) ? b.history : []).slice(-12).map((h) => String(h ?? '').slice(0, 200));
 
   const list = els
     .map((e) => `[${e.id}] ${e.kind} "${e.label}"${e.value ? ` valor="${e.value}"` : ''}${e.risk === 'blocked' ? ' (BLOQUEADO: no usar)' : ''}${e.risk === 'high' ? ' (sensible)' : ''}`)
@@ -287,7 +312,7 @@ ${history.length ? history.map((h, i) => `${i + 1}. ${h}`).join('\n') : '(nada t
 Responde con el JSON de la siguiente acción.`;
 
   try {
-    const out = (await env.AI.run(MODEL, {
+    const out = (await runModel(env, {
       messages: [
         { role: 'system', content: ACT_SYSTEM },
         { role: 'user', content: user },
@@ -299,7 +324,8 @@ Responde con el JSON de la siguiente acción.`;
     const text = String(out.response ?? out.choices?.[0]?.message?.content ?? '');
     return json(validateAct(extractJson(text), els));
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : 'Error del modelo' }, 502);
+    const f = aiFailure(e);
+    return json({ error: f.error }, f.status);
   }
 }
 
@@ -326,9 +352,11 @@ export default {
     } catch {
       return json({ error: 'JSON inválido' }, 400);
     }
-    if (!Array.isArray(body.messages) || body.messages.length === 0) return json({ error: 'Faltan mensajes' }, 400);
+    if (!body || !Array.isArray(body.messages)) return json({ error: 'Faltan mensajes' }, 400);
+    const valid = body.messages.filter((m) => m && typeof m === 'object');
+    if (valid.length === 0) return json({ error: 'Faltan mensajes' }, 400);
 
-    const history = body.messages.slice(-12).map((m) => ({
+    const history = valid.slice(-12).map((m) => ({
       role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const), // nunca 'system' desde el cliente
       content: String(m.content ?? '').slice(0, 8000),
     }));
@@ -354,7 +382,7 @@ export default {
     ];
 
     try {
-      const stream = await env.AI.run(MODEL, {
+      const stream = await runModel(env, {
         messages,
         stream: true,
         max_tokens: 1200,
@@ -366,8 +394,8 @@ export default {
         headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', ...CORS },
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Error del modelo';
-      return json({ error: msg }, 502);
+      const f = aiFailure(e);
+      return json({ error: f.error }, f.status);
     }
   },
 };

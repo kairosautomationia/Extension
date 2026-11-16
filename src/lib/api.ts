@@ -4,6 +4,39 @@ const BASE = (((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_A
 
 export const API_BASE = BASE;
 
+/** Si el servidor no responde en este tiempo, se corta en vez de dejar la tarea colgada. */
+export const CONNECT_TIMEOUT_MS = 40000;
+/** Durante la respuesta en streaming: máximo de silencio entre fragmentos. */
+const IDLE_TIMEOUT_MS = 30000;
+export const TIMEOUT_MSG = 'El modelo tardó demasiado en responder. Inténtalo de nuevo.';
+
+/** Une la señal del usuario (Detener) con un tiempo máximo. `timedOut()` dice si cortó el tiempo y no el usuario. */
+export function withTimeout(signal: AbortSignal | undefined, ms: number) {
+  const ctrl = new AbortController();
+  let hit = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (next: number) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      hit = true;
+      ctrl.abort();
+    }, next);
+  };
+  const onAbort = () => ctrl.abort();
+  if (signal?.aborted) ctrl.abort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  arm(ms);
+  return {
+    signal: ctrl.signal,
+    timedOut: () => hit,
+    arm,
+    done: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    },
+  };
+}
+
 export interface ApiMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -50,11 +83,27 @@ export async function streamAgent(
   onToken: (t: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  const t = withTimeout(signal, CONNECT_TIMEOUT_MS);
+  try {
+    await readStream(body, onToken, t);
+  } catch (e) {
+    if (t.timedOut()) throw new Error(TIMEOUT_MSG);
+    throw e;
+  } finally {
+    t.done();
+  }
+}
+
+async function readStream(
+  body: { messages: ApiMessage[]; page?: PageContext; image?: string },
+  onToken: (t: string) => void,
+  t: ReturnType<typeof withTimeout>,
+): Promise<void> {
   const res = await fetch(`${BASE}/api/agent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-    signal,
+    signal: t.signal,
   });
   if (!res.ok || !res.body) {
     let msg = `Error ${res.status}`;
@@ -69,6 +118,7 @@ export async function streamAgent(
   const dec = new TextDecoder();
   let buf = '';
   for (;;) {
+    t.arm(IDLE_TIMEOUT_MS); // si el modelo se queda en silencio, se corta en vez de esperar para siempre
     const { done, value } = await reader.read();
     if (done) break;
     buf += dec.decode(value, { stream: true });

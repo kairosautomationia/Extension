@@ -4,7 +4,7 @@
  * Las funciones `injected*` se INYECTAN en la página con chrome.scripting.executeScript:
  * deben ser autocontenidas (no pueden usar nada de fuera de su cuerpo).
  */
-import { API_BASE } from './api';
+import { API_BASE, CONNECT_TIMEOUT_MS, TIMEOUT_MSG, withTimeout } from './api';
 
 export type Risk = 'normal' | 'high' | 'blocked';
 
@@ -107,15 +107,23 @@ export async function requestAct(
   },
   signal?: AbortSignal,
 ): Promise<ActPlan> {
-  const res = await fetch(`${API_BASE}/api/act`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  });
-  const data = (await res.json().catch(() => ({}))) as Partial<ActPlan> & { error?: string };
-  if (!res.ok || !data.action) throw new Error(data.error ?? `Error ${res.status}`);
-  return { say: String(data.say ?? ''), action: data.action };
+  const t = withTimeout(signal, CONNECT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}/api/act`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: t.signal,
+    });
+    const data = (await res.json().catch(() => ({}))) as Partial<ActPlan> & { error?: string };
+    if (!res.ok || !data.action) throw new Error(data.error ?? `Error ${res.status}`);
+    return { say: String(data.say ?? ''), action: data.action };
+  } catch (e) {
+    if (t.timedOut()) throw new Error(TIMEOUT_MSG);
+    throw e;
+  } finally {
+    t.done();
+  }
 }
 
 /* ---------------- Funciones inyectadas en la página ---------------- */
@@ -182,7 +190,7 @@ export function injectedSnapshot(): Snapshot {
   };
 }
 
-type HzUi = { root: HTMLElement; cursor: HTMLElement; x: number; y: number };
+type HzUi = { root: HTMLElement; cursor: HTMLElement; x: number; y: number; ttl?: ReturnType<typeof setTimeout> };
 
 /** Dibuja un recuadro azul (celeste, como el grupo de pestañas Hanzo) con etiqueta sobre el elemento (id null = solo quita el recuadro). */
 export function injectedHighlight(id: number | null, text: string): boolean {
@@ -221,12 +229,20 @@ export function injectedHighlight(id: number | null, text: string): boolean {
     btn.onmouseenter = () => (btn.style.background = 'rgba(255,255,255,.22)');
     btn.onmouseleave = () => (btn.style.background = 'rgba(255,255,255,.12)');
     btn.onclick = () => {
-      try {
-        chrome.runtime.sendMessage({ type: 'hanzo-stop' })?.catch?.(() => {});
-      } catch {
-        /* extensión recargada */
-      }
       label.textContent = 'Deteniendo…';
+      const quitar = () => {
+        const ui = (window as unknown as { __hanzoUi?: HzUi }).__hanzoUi;
+        if (ui) clearTimeout(ui.ttl);
+        root.remove();
+        (window as unknown as { __hanzoUi?: HzUi }).__hanzoUi = undefined;
+      };
+      try {
+        // Si el panel ya no está abierto nadie escucha: la capa se retira sola para no quedar pegada en la página
+        const p = chrome.runtime.sendMessage({ type: 'hanzo-stop' });
+        if (p && typeof p.catch === 'function') p.catch(quitar);
+      } catch {
+        quitar(); // extensión recargada
+      }
     };
     bar.append(dot, label, btn);
     root.appendChild(bar);
@@ -245,6 +261,15 @@ export function injectedHighlight(id: number | null, text: string): boolean {
     document.documentElement.appendChild(root);
     u.__hanzoUi = { root, cursor, x: x0, y: y0 };
   }
+
+  // Seguro: si el panel se cierra o falla a mitad de una tarea, esta capa se retira sola (cada paso la renueva)
+  clearTimeout(u.__hanzoUi.ttl);
+  u.__hanzoUi.ttl = setTimeout(() => {
+    const cur = (window as unknown as { __hanzoUi?: HzUi }).__hanzoUi;
+    cur?.root.remove();
+    (window as unknown as { __hanzoUi?: HzUi }).__hanzoUi = undefined;
+    (window as unknown as { __hanzoBox?: HTMLElement }).__hanzoBox?.remove();
+  }, 120000);
 
   if (id === null) return true;
   const el = document.querySelector<HTMLElement>('[data-hanzo-id="' + id + '"]');
@@ -301,9 +326,10 @@ export function injectedHighlight(id: number | null, text: string): boolean {
 
 /** Quita el recuadro y los números que Hanzo puso en la página. */
 export function injectedClear(): boolean {
-  const w = window as unknown as { __hanzoBox?: HTMLElement; __hanzoUi?: { root: HTMLElement } };
+  const w = window as unknown as { __hanzoBox?: HTMLElement; __hanzoUi?: HzUi };
   w.__hanzoBox?.remove();
   w.__hanzoBox = undefined;
+  if (w.__hanzoUi) clearTimeout((w.__hanzoUi as HzUi).ttl);
   w.__hanzoUi?.root.remove();
   w.__hanzoUi = undefined;
   document.querySelectorAll('[data-hanzo-id]').forEach((e) => e.removeAttribute('data-hanzo-id'));

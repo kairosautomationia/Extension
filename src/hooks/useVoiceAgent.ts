@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Conversation } from '@elevenlabs/client';
 
 /** Agente de voz de Hanzo en ElevenLabs. El ID del agente es público; la clave secreta nunca va en la extensión. */
 const AGENT_ID = 'agent_4901m7fpft5yeg1vtkr0n8eqb7n2';
@@ -86,6 +85,8 @@ export function useVoiceAgent(onInstruction: (text: string) => void, context: ()
         },
         onModeChange: (m: { mode?: string }) => setState(m?.mode === 'speaking' ? 'speaking' : 'listening'),
       };
+      // La librería de voz es pesada: solo se descarga la primera vez que se usa el agente de voz
+      const { Conversation } = await import('@elevenlabs/client');
       const conv = (await Conversation.startSession(opts as never)) as unknown as Session;
       if (cancelRef.current) {
         // El usuario pulsó de nuevo mientras conectaba: se cierra la sesión recién abierta
