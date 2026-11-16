@@ -128,6 +128,51 @@ export async function requestAct(
 
 /* ---------------- Funciones inyectadas en la página ---------------- */
 
+/** Lee las tablas visibles de la página (solo lectura): cada una con su título y sus filas de texto. */
+export function injectedTables(): { tables: { title: string; rows: string[][] }[]; found: number } {
+  const MAX_TABLES = 12;
+  const MAX_ROWS = 500;
+  const MAX_COLS = 40;
+  const clean = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 400);
+  const all = Array.from(document.querySelectorAll('table')).filter((t) => !t.closest('[data-hanzo-overlay]') && !t.parentElement?.closest('table'));
+  const tables: { title: string; rows: string[][] }[] = [];
+  let found = 0;
+  for (const t of all) {
+    const st = getComputedStyle(t);
+    if (st.display === 'none' || st.visibility === 'hidden') continue;
+    const rows: string[][] = [];
+    for (const tr of Array.from(t.querySelectorAll('tr'))) {
+      if (tr.closest('table') !== t) continue;
+      if (rows.length >= MAX_ROWS) break;
+      const row: string[] = [];
+      for (const c of Array.from(tr.children)) {
+        if (c.tagName !== 'TD' && c.tagName !== 'TH') continue;
+        const span = Math.min(Math.max((c as HTMLTableCellElement).colSpan || 1, 1), 10);
+        row.push(clean((c as HTMLElement).innerText || c.textContent || ''));
+        for (let k = 1; k < span; k++) row.push('');
+        if (row.length >= MAX_COLS) break;
+      }
+      if (row.some((x) => x)) rows.push(row.slice(0, MAX_COLS));
+    }
+    // Tablas de maquetación (una fila o una columna) no son datos
+    if (rows.length < 2 || Math.max(...rows.map((r) => r.length)) < 2) continue;
+    found++;
+    if (tables.length >= MAX_TABLES) continue;
+    let title = clean(t.querySelector('caption')?.textContent ?? '');
+    for (let el: Element | null = t, hops = 0; !title && el && hops < 6; el = el.parentElement, hops++) {
+      let p = el.previousElementSibling;
+      for (let n = 0; p && n < 6; p = p.previousElementSibling, n++) {
+        if (/^H[1-6]$/.test(p.tagName)) {
+          title = clean(p.textContent ?? '');
+          break;
+        }
+      }
+    }
+    tables.push({ title: title.slice(0, 60), rows });
+  }
+  return { tables, found };
+}
+
 /** Lista los elementos interactivos visibles y les pone un número (data-hanzo-id). */
 export function injectedSnapshot(): Snapshot {
   const SENSITIVE = /(contrase|passw|clave|tarjeta|card|cvv|cvc|iban|cuenta banc|ssn|c[eé]dula|pasaporte|passport|otp|verificaci)/i;

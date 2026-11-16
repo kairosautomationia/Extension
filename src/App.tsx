@@ -123,6 +123,7 @@ export default function App() {
         voice={voice.state}
         voiceError={voice.error}
         onVoiceToggle={voice.toggle}
+        onExtractTables={agent.extractTables}
       />
 
       <HistoryDrawer

@@ -3,6 +3,7 @@ import type { AgentMessage, Attachment, Message, PermissionMode, PlanStep, Saved
 import { describeAction as describeRecorded } from '../lib/flows';
 import { hostOf, injectedFind, injectedReplayAct, injectedScrollTo, sameUrl, waitReady, type FindRes } from '../lib/replay';
 import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
+import { tableToMarkdown } from '../lib/exportDoc';
 import {
   MAX_STEPS,
   type ActPlan,
@@ -13,6 +14,7 @@ import {
   injectedClear,
   injectedHighlight,
   injectedSnapshot,
+  injectedTables,
   isBlockedHost,
   parseTask,
   requestAct,
@@ -352,6 +354,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         const image = [...attachments].reverse().find((a) => a.url && a.kind !== 'file')?.url;
         const history: ApiMessage[] = [];
         for (const m of messagesRef.current) {
+          if (m.local) continue; // lo hecho solo en la extensión (tablas extraídas) no va al modelo
           if (m.role === 'user') history.push({ role: 'user', content: m.text });
           else if (m.answer) history.push({ role: 'assistant', content: m.answer });
         }
@@ -761,5 +764,33 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
     return () => chrome.runtime.onMessage.removeListener(onMsg);
   }, [stop]);
 
-  return { messages, running, send, replay, stop, resolveApproval, togglePlan, reset, load };
+  /** Extrae las tablas de la pestaña activa y las muestra como tablas descargables. Todo ocurre en el navegador. */
+  const extractTables = useCallback(async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    const id = uid();
+    setMessages((ms) => [
+      ...ms,
+      { id: uid(), role: 'user', text: 'Extraer las tablas de esta página', attachments: [], local: true },
+      { id, role: 'agent', streaming: true, local: true },
+    ]);
+    const done = (answer: string) => patch(id, (m) => ({ ...m, answer, streaming: false }));
+    try {
+      const tabId = await activeTabId();
+      if (tabId === null) return done('No encuentro una pestaña de la que leer. Abre una página con tablas e inténtalo de nuevo.');
+      const r = await inTab(tabId, injectedTables, []);
+      if (!r) return done('No pude leer esta página. Las páginas internas del navegador (chrome://) y la tienda de extensiones no se pueden leer.');
+      if (r.tables.length === 0)
+        return done('No encontré tablas en esta página. Si los datos se ven como tabla pero no se extraen, la página los dibuja de otra forma: pídeme que los lea y los ordene.');
+      const parts = r.tables.map((t, i) => `## ${t.title || `Tabla ${i + 1}`}\n\n${tableToMarkdown(t.rows)}`);
+      const extra = r.found > r.tables.length ? `\n\nHay ${r.found - r.tables.length} tablas más en la página que no se incluyeron (máximo ${r.tables.length}).` : '';
+      done(`Encontré ${r.found} ${r.found === 1 ? 'tabla' : 'tablas'}. Descárgalas con **Descargar**: en Excel cada una queda en su hoja.\n\n${parts.join('\n\n')}${extra}`);
+    } catch {
+      done('No pude leer las tablas de esta página.');
+    } finally {
+      runningRef.current = false;
+    }
+  }, [patch]);
+
+  return { messages, running, send, replay, stop, resolveApproval, togglePlan, reset, load, extractTables };
 }

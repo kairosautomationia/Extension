@@ -19,6 +19,8 @@ export interface UserMessage {
   role: 'user';
   text: string;
   attachments: Attachment[];
+  /** Mensaje solo de la interfaz: no se envía al modelo. */
+  local?: boolean;
 }
 
 export interface AgentMessage {
@@ -31,6 +33,8 @@ export interface AgentMessage {
   stopped?: boolean;
   /** Repetición de una acción grabada (no ofrece "Guardar como atajo"). */
   replay?: boolean;
+  /** Respuesta hecha en la extensión (p.ej. tablas extraídas): no se envía al modelo. */
+  local?: boolean;
 }
 
 export type Message = UserMessage | AgentMessage;

@@ -1,7 +1,7 @@
 import { shrinkImage } from '../lib/image';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, MousePointerClick, Paperclip, Plus, Square, Table, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
 import { AI_TARGETS, askInAi } from '../lib/aiLinks';
 import type { VoiceState } from '../hooks/useVoiceAgent';
@@ -54,6 +54,8 @@ interface Props {
   voice?: VoiceState;
   voiceError?: { msg: string; n: number } | null;
   onVoiceToggle?: () => void;
+  /** Extrae las tablas de la página activa (se muestran en el chat y se descargan). */
+  onExtractTables?: () => void;
 }
 
 function openLink(url: string) {
@@ -64,7 +66,7 @@ function openLink(url: string) {
   }
 }
 
-export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord, captureSignal = 0, onCaptured, voice = 'off', voiceError = null, onVoiceToggle }: Props) {
+export default function PromptBox({ tab, running, onSend, onStop, draftSeed, recording, recSecs, recActions, recError, onToggleRecord, captureSignal = 0, onCaptured, voice = 'off', voiceError = null, onVoiceToggle, onExtractTables }: Props) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [tabLinked, setTabLinked] = useState(true);
@@ -403,6 +405,19 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                   >
                     <Camera size={16} className="text-mute" /> Captura de pantalla
                   </button>
+                  {onExtractTables && (
+                    <button
+                      role="menuitem"
+                      disabled={running}
+                      onClick={() => {
+                        setPlusOpen(false);
+                        onExtractTables();
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left text-[13px] hover:bg-paper disabled:opacity-40"
+                    >
+                      <Table size={16} className="text-mute" /> Extraer tablas de la página
+                    </button>
+                  )}
                 </m.div>
               )}
             </AnimatePresence>

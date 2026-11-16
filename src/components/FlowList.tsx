@@ -4,6 +4,8 @@ import {
   Camera,
   ChevronRight,
   Download,
+  FileCode,
+  FileText,
   Keyboard,
   ListChecks,
   MousePointerClick,
@@ -18,7 +20,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { RecordedAction, SavedFlow } from '../types';
-import { describeAction, exportFlows, parseImport } from '../lib/flows';
+import { describeAction, exportFlows, flowsToMarkdown, parseImport } from '../lib/flows';
+import { downloadFile } from '../lib/exportDoc';
+import { useClickOutside } from '../hooks/useClickOutside';
 import { whenLabel } from '../lib/history';
 
 const ICONS: Record<RecordedAction['type'], LucideIcon> = {
@@ -78,6 +82,9 @@ export default function FlowList({
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [expOpen, setExpOpen] = useState(false);
+  const expRef = useRef<HTMLDivElement>(null);
+  useClickOutside(expRef, () => setExpOpen(false), expOpen);
   const [dTitle, setDTitle] = useState('');
   const [dDesc, setDDesc] = useState('');
   const [dTags, setDTags] = useState('');
@@ -151,17 +158,15 @@ export default function FlowList({
     return g;
   }, [visible]);
 
-  const doExport = () => {
+  const doExport = (fmt: 'md' | 'json') => {
+    setExpOpen(false);
     try {
-      const blob = new Blob([exportFlows(flows)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `hanzo-flujos-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      const day = new Date().toISOString().slice(0, 10);
+      downloadFile(
+        fmt === 'md'
+          ? { name: `hanzo-flujos-${day}.md`, mime: 'text/markdown', bytes: new TextEncoder().encode(flowsToMarkdown(flows)) }
+          : { name: `hanzo-flujos-${day}.json`, mime: 'application/json', bytes: new TextEncoder().encode(exportFlows(flows)) },
+      );
       setNotice(`Exporté ${flows.length} ${flows.length === 1 ? 'flujo' : 'flujos'}.`);
     } catch {
       setNotice('No se pudo exportar.');
@@ -198,24 +203,54 @@ export default function FlowList({
         <button
           onClick={() => fileRef.current?.click()}
           aria-label="Importar flujos desde un archivo"
-          title="Importar flujos (archivo .json)"
+          title="Importar flujos (archivo .md o .json)"
           className="grid h-7 w-7 place-items-center rounded-md text-mute hover:bg-bubble hover:text-ink"
         >
           <Upload size={14} />
         </button>
-        <button
-          onClick={doExport}
-          disabled={flows.length === 0}
-          aria-label="Exportar todos los flujos a un archivo"
-          title="Exportar flujos (archivo .json)"
-          className="grid h-7 w-7 place-items-center rounded-md text-mute hover:bg-bubble hover:text-ink disabled:opacity-40"
-        >
-          <Download size={14} />
-        </button>
+        <div ref={expRef} className="relative">
+          <button
+            onClick={() => setExpOpen((o) => !o)}
+            disabled={flows.length === 0}
+            aria-haspopup="menu"
+            aria-expanded={expOpen}
+            aria-label="Exportar todos los flujos a un archivo"
+            title="Exportar flujos"
+            className="grid h-7 w-7 place-items-center rounded-md text-mute hover:bg-bubble hover:text-ink disabled:opacity-40"
+          >
+            <Download size={14} />
+          </button>
+          {expOpen && (
+            <div role="menu" className="absolute right-0 top-8 z-30 w-60 rounded-xl border border-line bg-card p-1 shadow-pop">
+              <button
+                role="menuitem"
+                onClick={() => doExport('md')}
+                className="flex w-full items-start gap-2.5 rounded-lg p-2 text-left hover:bg-paper"
+              >
+                <FileText size={16} className="mt-0.5 shrink-0 text-mute" />
+                <span>
+                  <span className="block text-[13px] font-medium">Markdown (.md)</span>
+                  <span className="block text-[11.5px] leading-snug text-mute">Para leer o dárselo a una IA. También se puede reimportar.</span>
+                </span>
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => doExport('json')}
+                className="flex w-full items-start gap-2.5 rounded-lg p-2 text-left hover:bg-paper"
+              >
+                <FileCode size={16} className="mt-0.5 shrink-0 text-mute" />
+                <span>
+                  <span className="block text-[13px] font-medium">JSON (.json)</span>
+                  <span className="block text-[11.5px] leading-snug text-mute">Copia de seguridad técnica.</span>
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
         <input
           ref={fileRef}
           type="file"
-          accept="application/json,.json"
+          accept=".md,.markdown,.json,text/markdown,application/json"
           className="hidden"
           onChange={(e) => {
             void doImport(e.target.files?.[0]);

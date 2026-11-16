@@ -158,11 +158,48 @@ export function exportFlows(flows: SavedFlow[]): string {
   return JSON.stringify({ hanzo: 'flujos', version: 1, exportedAt: Date.now(), flows }, null, 2);
 }
 
-/** Lee un archivo exportado (o una lista suelta de flujos). Los flujos importados reciben ids nuevos. */
+const MD_MARK = 'hanzo-flows:v1';
+const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/**
+ * Biblioteca en Markdown: legible para personas y para cualquier modelo de IA (pasos numerados en lenguaje natural).
+ * Al final lleva los datos exactos dentro de un comentario, para poder volver a importarla sin perder nada.
+ */
+export function flowsToMarkdown(flows: SavedFlow[]): string {
+  const day = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const out: string[] = [
+    '# Flujos de Hanzo',
+    '',
+    `Biblioteca exportada el ${day(Date.now())} · ${flows.length} ${flows.length === 1 ? 'flujo' : 'flujos'}.`,
+    '',
+    'Cada flujo es una tarea grabada en una web, con sus pasos en orden. Hanzo puede repetirla con un clic.',
+  ];
+  flows.forEach((f, i) => {
+    out.push('', '---', '', `## ${i + 1}. ${oneLine(f.title)}`, '');
+    out.push(`- **Sitio:** ${f.host || 'sin sitio'}`);
+    if (f.startUrl) out.push(`- **Empieza en:** ${f.startUrl}`);
+    if (f.description) out.push(`- **Para qué sirve:** ${oneLine(f.description)}`);
+    if (f.tags?.length) out.push(`- **Etiquetas:** ${f.tags.join(', ')}`);
+    out.push(`- **Grabado:** ${day(f.createdAt)}`);
+    if (f.runs) {
+      const last = f.lastResult === 'ok' ? 'salió bien' : f.lastResult === 'fail' ? 'falló' : '';
+      out.push(`- **Usado:** ${f.runs} ${f.runs === 1 ? 'vez' : 'veces'}${last ? ` · la última ${last}` : ''}${f.lastNote ? ` (${oneLine(f.lastNote)})` : ''}`);
+    }
+    out.push('', '**Pasos:**', '');
+    f.actions.forEach((a, k) => out.push(`${k + 1}. ${oneLine(describeAction(a))}`));
+  });
+  // "--" no puede aparecer dentro de un comentario HTML; en JSON solo puede ir dentro de textos, donde se escribe como \u002d
+  const data = JSON.stringify({ hanzo: 'flujos', version: 1, flows }).replace(/--/g, '\\u002d\\u002d');
+  out.push('', '---', '', 'Datos para volver a importar esta biblioteca en Hanzo (no los edites):', '', `<!-- ${MD_MARK} ${data} -->`, '');
+  return out.join('\n');
+}
+
+/** Lee un archivo exportado (JSON o Markdown) o una lista suelta de flujos. Los flujos importados reciben ids nuevos. */
 export function parseImport(text: string): SavedFlow[] {
+  const md = new RegExp(`<!--\\s*${MD_MARK}\\s+([\\s\\S]*?)\\s*-->`).exec(text);
   let data: unknown;
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(md ? md[1] : text);
   } catch {
     return [];
   }
