@@ -181,7 +181,7 @@ export function injectedSnapshot(): Snapshot {
   };
 }
 
-/** Dibuja un recuadro azul (el mismo azul del grupo de pestañas Hanzo) con etiqueta sobre el elemento (id null = solo quita el recuadro). */
+/** Dibuja un recuadro azul (celeste, como el grupo de pestañas Hanzo) con etiqueta sobre el elemento (id null = solo quita el recuadro). */
 export function injectedHighlight(id: number | null, text: string): boolean {
   const w = window as unknown as { __hanzoBox?: HTMLElement };
   w.__hanzoBox?.remove();
@@ -194,7 +194,7 @@ export function injectedHighlight(id: number | null, text: string): boolean {
   const box = document.createElement('div');
   box.setAttribute('data-hanzo-overlay', '1');
   box.style.cssText =
-    'position:fixed;z-index:2147483647;pointer-events:none;border:3px solid #1a73e8;border-radius:6px;box-shadow:0 0 0 4px rgba(26,115,232,.28);';
+    'position:fixed;z-index:2147483647;pointer-events:none;border:3px solid #4aa3ff;border-radius:6px;box-shadow:0 0 0 4px rgba(74,163,255,.30);';
   box.style.left = Math.round(r.left - 4) + 'px';
   box.style.top = Math.round(r.top - 4) + 'px';
   box.style.width = Math.round(r.width + 8) + 'px';
@@ -202,7 +202,7 @@ export function injectedHighlight(id: number | null, text: string): boolean {
   const tag = document.createElement('div');
   tag.textContent = text.slice(0, 70);
   tag.style.cssText =
-    'position:absolute;left:0;background:#1a73e8;color:#fff;font:600 12px/1 system-ui,sans-serif;padding:5px 8px;border-radius:5px;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis;';
+    'position:absolute;left:0;background:#4aa3ff;color:#0b2545;font:600 12px/1 system-ui,sans-serif;padding:5px 8px;border-radius:5px;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis;';
   tag.style.top = r.top < 34 ? Math.round(r.height + 14) + 'px' : '-30px';
   box.appendChild(tag);
   document.documentElement.appendChild(box);
