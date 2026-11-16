@@ -139,8 +139,10 @@ function slug(s: string): string {
 
 function baseName(md: string): string {
   const blocks = parseMarkdown(md);
-  const first = blocks.find((b) => b.t === 'h' || b.t === 'p' || b.t === 'li') as { text: string } | undefined;
-  return `hanzo-${slug(plain(first?.text ?? ''))}-${today()}`;
+  const h = blocks.find((b) => b.t === 'h') as { text: string } | undefined;
+  const first = blocks.find((b) => b.t === 'p' || b.t === 'li') as { text: string } | undefined;
+  const from = h ? plain(h.text) : plain(first?.text ?? '').split(/\s+/).slice(0, 6).join(' ');
+  return `hanzo-${slug(from)}-${today()}`;
 }
 
 /* ---------------- Utilidades binarias ---------------- */
@@ -459,20 +461,33 @@ function toAnsi(s: string): number[] {
 
 const textWidth = (codes: number[], size: number, bold: boolean) => (codes.reduce((n, c) => n + cw(c), 0) * size * (bold ? 1.05 : 1)) / 1000;
 
-interface Word {
+interface Token {
   codes: number[];
   bold: boolean;
 }
-type Line = Word[];
+/** Una palabra: uno o más tramos pegados (p.ej. «**Descargar**:» son dos tramos sin espacio entre ellos). */
+type Group = Token[];
+type Line = Group[];
+
+const groupWidth = (g: Group, size: number) => g.reduce((n, t) => n + textWidth(t.codes, size, t.bold), 0);
 
 /** Parte un texto con negritas en líneas que caben en `maxW` puntos. */
 function wrap(text: string, size: number, maxW: number, forceBold = false, maxLines = 400): Line[] {
-  const words: Word[] = [];
+  const groups: Group[] = [];
+  let attach = false;
   for (const r of runs(text)) {
-    for (const w of r.text.split(/\s+/)) {
-      if (!w) continue;
-      const codes = toAnsi(w);
-      if (codes.length) words.push({ codes, bold: r.bold || forceBold });
+    for (const part of r.text.split(/(\s+)/)) {
+      if (!part) continue;
+      if (/^\s+$/.test(part)) {
+        attach = false;
+        continue;
+      }
+      const codes = toAnsi(part);
+      if (!codes.length) continue;
+      const tok = { codes, bold: r.bold || forceBold };
+      if (attach && groups.length) groups[groups.length - 1].push(tok);
+      else groups.push([tok]);
+      attach = true;
     }
   }
   const lines: Line[] = [];
@@ -484,19 +499,21 @@ function wrap(text: string, size: number, maxW: number, forceBold = false, maxLi
     cur = [];
     curW = 0;
   };
-  for (let w of words) {
+  for (const g0 of groups) {
+    let g = g0;
     // Palabra más ancha que la línea: se corta
-    while (textWidth(w.codes, size, w.bold) > maxW && w.codes.length > 1) {
-      let n = w.codes.length - 1;
-      while (n > 1 && textWidth(w.codes.slice(0, n), size, w.bold) > maxW) n--;
+    while (groupWidth(g, size) > maxW && g.length === 1 && g[0].codes.length > 1) {
+      const t = g[0];
+      let n = t.codes.length - 1;
+      while (n > 1 && textWidth(t.codes.slice(0, n), size, t.bold) > maxW) n--;
       push();
-      lines.push([{ codes: w.codes.slice(0, n), bold: w.bold }]);
-      w = { codes: w.codes.slice(n), bold: w.bold };
+      lines.push([[{ codes: t.codes.slice(0, n), bold: t.bold }]]);
+      g = [{ codes: t.codes.slice(n), bold: t.bold }];
     }
-    const ww = textWidth(w.codes, size, w.bold);
-    if (cur.length && curW + space + ww > maxW) push();
-    curW += (cur.length ? space : 0) + ww;
-    cur.push(w);
+    const gw = groupWidth(g, size);
+    if (cur.length && curW + space + gw > maxW) push();
+    curW += (cur.length ? space : 0) + gw;
+    cur.push(g);
     if (lines.length >= maxLines) break;
   }
   push();
@@ -527,19 +544,22 @@ export function toPdf(blocks: Block[]): Uint8Array {
   };
   /** Dibuja una línea (con tramos en negrita) con su base en `top + size`. */
   const drawLine = (line: Line, x: number, top: number, size: number) => {
+    const items: { codes: number[]; bold: boolean; sp: boolean }[] = [];
+    line.forEach((g, gi) => g.forEach((t, ti) => items.push({ codes: t.codes, bold: t.bold, sp: gi > 0 && ti === 0 })));
     let cx = x;
     let i = 0;
-    while (i < line.length) {
-      const bold = line[i].bold;
+    while (i < items.length) {
+      const bold = items[i].bold;
+      if (items[i].sp) cx += (cw(32) * size) / 1000;
       let j = i;
       const seg: number[] = [];
-      while (j < line.length && line[j].bold === bold) {
-        if (seg.length) seg.push(32);
-        seg.push(...line[j].codes);
+      while (j < items.length && items[j].bold === bold) {
+        if (j > i && items[j].sp) seg.push(32);
+        seg.push(...items[j].codes);
         j++;
       }
       out().push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${n2(cx)} ${n2(PH - top - size)} Td ${lit(seg)} Tj ET`);
-      cx += textWidth(seg, size, bold) + (j < line.length ? (cw(32) * size) / 1000 : 0);
+      cx += textWidth(seg, size, bold);
       i = j;
     }
   };
@@ -564,7 +584,7 @@ export function toPdf(blocks: Block[]): Uint8Array {
     else if (b.t === 'p') flow(b.text, 11, 15, 0, false, 0, 6);
     else if (b.t === 'li') {
       const top = flow(b.text, 11, 15, 16, false, 0, 3);
-      if (top >= 0) drawLine([{ codes: toAnsi(b.n ? `${b.n}.` : '•'), bold: false }], M, top, 11);
+      if (top >= 0) drawLine([[{ codes: toAnsi(b.n ? `${b.n}.` : '•'), bold: false }]], M, top, 11);
     } else {
       const cols = Math.max(...b.rows.map((r) => r.length));
       const weights = Array.from({ length: cols }, (_, c) => {

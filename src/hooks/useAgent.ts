@@ -784,7 +784,10 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         return done('No encontré tablas en esta página. Si los datos se ven como tabla pero no se extraen, la página los dibuja de otra forma: pídeme que los lea y los ordene.');
       const parts = r.tables.map((t, i) => `## ${t.title || `Tabla ${i + 1}`}\n\n${tableToMarkdown(t.rows)}`);
       const extra = r.found > r.tables.length ? `\n\nHay ${r.found - r.tables.length} tablas más en la página que no se incluyeron (máximo ${r.tables.length}).` : '';
-      done(`Encontré ${r.found} ${r.found === 1 ? 'tabla' : 'tablas'}. Descárgalas con **Descargar**: en Excel cada una queda en su hoja.\n\n${parts.join('\n\n')}${extra}`);
+      const host = (await tabState(tabId))?.host;
+      done(
+        `# Tablas${host ? ` de ${host}` : ' de la página'}\n\nEncontré ${r.found} ${r.found === 1 ? 'tabla' : 'tablas'}. Descárgalas con **Descargar**: en Excel cada una queda en su hoja.\n\n${parts.join('\n\n')}${extra}`,
+      );
     } catch {
       done('No pude leer las tablas de esta página.');
     } finally {
