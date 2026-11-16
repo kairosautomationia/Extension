@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, AudioLines, Camera, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, MousePointerClick, Paperclip, Plus, Square, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
 import { AI_TARGETS, askInAi } from '../lib/aiLinks';
 import type { VoiceState } from '../hooks/useVoiceAgent';
@@ -8,6 +8,7 @@ import type { Attachment, RecordedAction, TabInfo } from '../types';
 import { describeAction } from '../lib/flows';
 import { splitCommand } from '../lib/actions';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { useDictation } from '../hooks/useDictation';
 
 const LINE = 20; // px por línea (text-sm / leading-5)
 const MIN_H = LINE * 2;
@@ -74,9 +75,25 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const [scrollTop, setScrollTop] = useState(0);
   const plusRef = useRef<HTMLDivElement>(null);
   const skillsRef = useRef<HTMLDivElement>(null);
+  const voiceMenuRef = useRef<HTMLDivElement>(null);
+  const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
+  // Qué hace el botón del micrófono: dictar (voz a texto) o conversar con el agente de voz
+  const [voiceMode, setVoiceMode] = useState<'dictado' | 'agente'>(() => {
+    try {
+      return localStorage.getItem('hanzo.voiceMode') === 'agente' ? 'agente' : 'dictado';
+    } catch {
+      return 'dictado';
+    }
+  });
+  const dictBaseRef = useRef('');
+  useClickOutside(voiceMenuRef, () => setVoiceMenuOpen(false), voiceMenuOpen);
   useClickOutside(plusRef, () => setPlusOpen(false), plusOpen);
   useClickOutside(skillsRef, () => setSkillsOpen(false), skillsOpen);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const dict = useDictation(
+    (fin, interim) => setText(`${dictBaseRef.current}${fin}${interim}`),
+    (msg) => flash(msg),
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -104,6 +121,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const submit = () => {
     const t = text.trim();
     if (!t || running) return;
+    dict.stop();
     onSend(t, attachments);
     setText('');
     setAttachments([]);
@@ -465,32 +483,108 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
               </AnimatePresence>
             </div>
 
-            <m.button
-              type="button"
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.92 }}
-              onClick={() => onVoiceToggle?.()}
-              aria-label={voice === 'off' ? 'Hablar con el agente de voz' : 'Terminar la conversación de voz'}
-              aria-pressed={voice !== 'off'}
-              title={voice === 'off' ? 'Agente de voz' : voice === 'connecting' ? 'Conectando…' : voice === 'speaking' ? 'Hanzo está hablando (pulsa para terminar)' : 'Te escucho (pulsa para terminar)'}
-              className={`relative grid h-8 w-8 place-items-center rounded-full transition-colors ${
-                voice === 'off' ? 'text-mute hover:bg-accent-soft hover:text-accent-ink' : 'bg-accent text-white'
-              }`}
-            >
-              {(voice === 'listening' || voice === 'speaking') && (
-                <m.span
-                  aria-hidden
-                  className="absolute inset-0 rounded-full bg-accent/40"
-                  animate={{ scale: voice === 'speaking' ? [1, 1.7, 1] : [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
-                  transition={{ duration: voice === 'speaking' ? 0.9 : 1.8, repeat: Infinity, ease: 'easeInOut' }}
-                />
-              )}
-              {voice === 'connecting' ? (
-                <Loader2 size={16} className="relative animate-spin" />
-              ) : (
-                <AudioLines size={17} strokeWidth={2} className="relative" />
-              )}
-            </m.button>
+            <div ref={voiceMenuRef} className="relative flex items-center">
+              <button
+                type="button"
+                onClick={() => setVoiceMenuOpen((o) => !o)}
+                aria-haspopup="menu"
+                aria-expanded={voiceMenuOpen}
+                aria-label="Elegir entre dictado y agente de voz"
+                title="Dictado o agente de voz"
+                className="grid h-8 w-5 place-items-center rounded-full text-mute transition-colors hover:bg-accent-soft hover:text-accent-ink"
+              >
+                <ChevronDown size={13} className={`transition-transform ${voiceMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence>
+                {voiceMenuOpen && (
+                  <m.div
+                    role="menu"
+                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.14 }}
+                    className="absolute bottom-10 right-0 z-40 w-60 rounded-xl border border-line bg-card p-1 shadow-pop"
+                  >
+                    {(
+                      [
+                        { id: 'dictado', label: 'Dictado', hint: 'Convierte tu voz en texto', Icon: Mic },
+                        { id: 'agente', label: 'Agente de voz', hint: 'Conversa y le pides tareas', Icon: AudioLines },
+                      ] as const
+                    ).map(({ id, label, hint, Icon }) => (
+                      <button
+                        key={id}
+                        role="menuitemradio"
+                        aria-checked={voiceMode === id}
+                        onClick={() => {
+                          if (id !== voiceMode) {
+                            dict.stop();
+                            if (voice !== 'off') onVoiceToggle?.();
+                            setVoiceMode(id);
+                            try {
+                              localStorage.setItem('hanzo.voiceMode', id);
+                            } catch {
+                              /* sin almacenamiento */
+                            }
+                          }
+                          setVoiceMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-paper"
+                      >
+                        <Icon size={16} className="shrink-0 text-mute" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] font-medium">{label}</span>
+                          <span className="block text-[11.5px] leading-snug text-mute">{hint}</span>
+                        </span>
+                        {voiceMode === id && <Check size={15} className="shrink-0 text-accent" />}
+                      </button>
+                    ))}
+                  </m.div>
+                )}
+              </AnimatePresence>
+              <m.button
+                type="button"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => {
+                  if (voiceMode === 'agente') {
+                    dict.stop();
+                    onVoiceToggle?.();
+                  } else if (dict.listening) dict.stop();
+                  else {
+                    if (voice !== 'off') onVoiceToggle?.(); // el agente de voz usa el mismo micrófono
+                    const cur = text;
+                    dictBaseRef.current = cur && !/\s$/.test(cur) ? `${cur} ` : cur;
+                    void dict.start();
+                  }
+                }}
+                aria-label={
+                  voiceMode === 'dictado'
+                    ? dict.listening ? 'Terminar el dictado' : 'Dictar con el micrófono'
+                    : voice === 'off' ? 'Hablar con el agente de voz' : 'Terminar la conversación de voz'
+                }
+                aria-pressed={voiceMode === 'dictado' ? dict.listening : voice !== 'off'}
+                title={voiceMode === 'dictado' ? (dict.listening ? 'Te escucho: habla y se escribe (pulsa para terminar)' : 'Dictar: voz a texto') : voice === 'off' ? 'Agente de voz' : voice === 'connecting' ? 'Conectando…' : voice === 'speaking' ? 'Hanzo está hablando (pulsa para terminar)' : 'Te escucho (pulsa para terminar)'}
+                className={`relative grid h-8 w-8 place-items-center rounded-full transition-colors ${
+                  (voiceMode === 'dictado' ? !dict.listening : voice === 'off') ? 'text-mute hover:bg-accent-soft hover:text-accent-ink' : 'bg-accent text-white'
+                }`}
+              >
+                {((voiceMode === 'agente' && (voice === 'listening' || voice === 'speaking')) || (voiceMode === 'dictado' && dict.listening)) && (
+                  <m.span
+                    aria-hidden
+                    className="absolute inset-0 rounded-full bg-accent/40"
+                    animate={{ scale: voice === 'speaking' ? [1, 1.7, 1] : [1, 1.35, 1], opacity: [0.6, 0, 0.6] }}
+                    transition={{ duration: voice === 'speaking' ? 0.9 : 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                )}
+                {voiceMode === 'agente' && voice === 'connecting' ? (
+                  <Loader2 size={16} className="relative animate-spin" />
+                ) : voiceMode === 'dictado' ? (
+                  <Mic size={17} strokeWidth={2} className="relative" />
+                ) : (
+                  <AudioLines size={17} strokeWidth={2} className="relative" />
+                )}
+              </m.button>
+            </div>
 
             {running ? (
               <button
