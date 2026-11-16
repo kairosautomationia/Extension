@@ -91,7 +91,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   useClickOutside(skillsRef, () => setSkillsOpen(false), skillsOpen);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const dict = useDictation(
-    (fin, interim) => setText(`${dictBaseRef.current}${fin}${interim}`),
+    (fin, interim) => setText(`${dictBaseRef.current}${dictBaseRef.current ? (fin + interim).replace(/^\s+/, '') : fin + interim}`),
     (msg) => flash(msg),
   );
   const fileRef = useRef<HTMLInputElement>(null);
