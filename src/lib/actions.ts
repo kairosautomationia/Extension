@@ -182,13 +182,15 @@ export function injectedSnapshot(): Snapshot {
   };
 }
 
+type HzUi = { root: HTMLElement; cursor: HTMLElement; x: number; y: number };
+
 /** Dibuja un recuadro azul (celeste, como el grupo de pestañas Hanzo) con etiqueta sobre el elemento (id null = solo quita el recuadro). */
 export function injectedHighlight(id: number | null, text: string): boolean {
   const w = window as unknown as { __hanzoBox?: HTMLElement };
   w.__hanzoBox?.remove();
   w.__hanzoBox = undefined;
   // Capa "Hanzo está trabajando": borde luminoso, barra con botón Detener y cursor animado
-  const u = window as unknown as { __hanzoUi?: { root: HTMLElement; cursor: HTMLElement } };
+  const u = window as unknown as { __hanzoUi?: HzUi };
   if (!u.__hanzoUi || !u.__hanzoUi.root.isConnected) {
     const root = document.createElement('div');
     root.setAttribute('data-hanzo-overlay', '1');
@@ -198,7 +200,8 @@ export function injectedHighlight(id: number | null, text: string): boolean {
       '@keyframes hz-glow{0%,100%{box-shadow:inset 0 0 0 2px rgba(74,163,255,.85),inset 0 0 28px rgba(74,163,255,.35)}50%{box-shadow:inset 0 0 0 2px rgba(74,163,255,.55),inset 0 0 14px rgba(74,163,255,.18)}}' +
       '@keyframes hz-dot{0%,100%{opacity:1}50%{opacity:.35}}' +
       '@keyframes hz-in{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}' +
-      '@keyframes hz-ripple{from{transform:translate(-50%,-50%) scale(.3);opacity:.9}to{transform:translate(-50%,-50%) scale(1.6);opacity:0}}';
+      '@keyframes hz-ripple{from{transform:translate(-50%,-50%) scale(.2);opacity:.85}to{transform:translate(-50%,-50%) scale(1.9);opacity:0}}' +
+      '@keyframes hz-halo{0%,100%{transform:translate(-50%,-50%) scale(.85);opacity:.55}50%{transform:translate(-50%,-50%) scale(1.2);opacity:.2}}';
     root.appendChild(st);
     const glow = document.createElement('div');
     glow.style.cssText = 'position:absolute;inset:0;animation:hz-glow 2.4s ease-in-out infinite;';
@@ -227,14 +230,20 @@ export function injectedHighlight(id: number | null, text: string): boolean {
     };
     bar.append(dot, label, btn);
     root.appendChild(bar);
+    const x0 = Math.round(window.innerWidth * 0.5);
+    const y0 = Math.round(window.innerHeight * 0.62);
     const cursor = document.createElement('div');
-    cursor.style.cssText =
-      'position:absolute;left:' + Math.round(window.innerWidth / 2) + 'px;top:' + Math.round(window.innerHeight / 2) + 'px;width:22px;height:22px;transition:left .45s cubic-bezier(.22,.8,.3,1),top .45s cubic-bezier(.22,.8,.3,1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));';
+    cursor.setAttribute('data-hz-cursor', '1');
+    cursor.style.cssText = 'position:absolute;left:0;top:0;will-change:transform;transform:translate(' + x0 + 'px,' + y0 + 'px);';
     cursor.innerHTML =
-      '<svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 2.5l15.5 9.2-6.9 1.5 3.9 7.1-2.8 1.5-3.9-7.1L5 19.2z" fill="#4aa3ff" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+      '<div style="position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(74,163,255,.55),rgba(74,163,255,0) 70%);animation:hz-halo 1.8s ease-in-out infinite;"></div>' +
+      '<div data-hz-arrow="1" style="position:absolute;left:0;top:0;transform-origin:0 0;filter:drop-shadow(0 3px 5px rgba(11,37,69,.38));">' +
+      '<svg width="22" height="30" viewBox="-1.5 -1.5 17 23" style="display:block"><defs><linearGradient id="hzg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#2f7ff0"/></linearGradient></defs>' +
+      '<path d="M0 0 L0 17.2 L4.5 13.1 L7.5 19.8 L10.3 18.6 L7.4 12.1 L13.4 12.1 Z" fill="url(#hzg)" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>' +
+      '<div style="position:absolute;left:17px;top:22px;padding:4px 9px;border-radius:999px;background:linear-gradient(135deg,#5db4ff,#2f7ff0);color:#fff;font:600 11px/1 system-ui,-apple-system,sans-serif;letter-spacing:.2px;white-space:nowrap;box-shadow:0 4px 12px rgba(47,127,240,.45);">Hanzo</div>';
     root.appendChild(cursor);
     document.documentElement.appendChild(root);
-    u.__hanzoUi = { root, cursor };
+    u.__hanzoUi = { root, cursor, x: x0, y: y0 };
   }
 
   if (id === null) return true;
@@ -242,9 +251,35 @@ export function injectedHighlight(id: number | null, text: string): boolean {
   if (!el) return false;
   el.scrollIntoView({ block: 'center', inline: 'center' });
   const r = el.getBoundingClientRect();
-  // El cursor de Hanzo se mueve hasta el elemento
-  u.__hanzoUi.cursor.style.left = Math.round(r.left + Math.min(r.width / 2, 40)) + 'px';
-  u.__hanzoUi.cursor.style.top = Math.round(r.top + r.height / 2) + 'px';
+  // El cursor de Hanzo viaja en arco suave hasta el elemento
+  {
+    const ui = u.__hanzoUi;
+    const tx = Math.round(r.left + Math.min(r.width / 2, 40));
+    const ty = Math.round(r.top + r.height / 2);
+    const dx = tx - ui.x;
+    const dy = ty - ui.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 2) {
+      const dur = Math.min(620, Math.max(320, dist * 0.8));
+      const mx = ui.x + dx * 0.5 - dy * 0.14;
+      const my = ui.y + dy * 0.5 + dx * 0.14;
+      const anim = ui.cursor.animate(
+        [
+          { transform: 'translate(' + ui.x + 'px,' + ui.y + 'px)' },
+          { transform: 'translate(' + Math.round(mx) + 'px,' + Math.round(my) + 'px)', offset: 0.5 },
+          { transform: 'translate(' + tx + 'px,' + ty + 'px)' },
+        ],
+        { duration: dur, easing: 'cubic-bezier(.45,0,.15,1)', fill: 'forwards' },
+      );
+      const cur = ui.cursor;
+      anim.onfinish = () => {
+        cur.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+        anim.cancel();
+      };
+    }
+    ui.x = tx;
+    ui.y = ty;
+  }
   const box = document.createElement('div');
   box.setAttribute('data-hanzo-overlay', '1');
   box.style.cssText =
@@ -278,19 +313,24 @@ export function injectedClear(): boolean {
 /** Ejecuta UNA acción. Vuelve a comprobar en la página que el campo no sea sensible. */
 export function injectedAct(a: ActAction): { ok: boolean; msg: string } {
   const SENSITIVE = /(contrase|passw|clave|tarjeta|card|cvv|cvc|iban|cuenta banc|ssn|c[eé]dula|pasaporte|passport|otp|verificaci)/i;
-  const w = window as unknown as { __hanzoBox?: HTMLElement; __hanzoUi?: { root: HTMLElement; cursor: HTMLElement } };
+  const w = window as unknown as { __hanzoBox?: HTMLElement; __hanzoUi?: HzUi };
   w.__hanzoBox?.remove();
   w.__hanzoBox = undefined;
-  // Onda bajo el cursor de Hanzo al hacer clic o escribir
+  // Clic del cursor de Hanzo: se hunde y suelta dos ondas
   if (w.__hanzoUi && (a.type === 'click' || a.type === 'type')) {
-    const c = w.__hanzoUi.cursor;
-    const rip = document.createElement('div');
-    rip.style.cssText =
-      'position:absolute;width:34px;height:34px;border-radius:50%;border:2px solid #4aa3ff;background:rgba(74,163,255,.18);animation:hz-ripple .5s ease-out forwards;';
-    rip.style.left = c.style.left;
-    rip.style.top = c.style.top;
-    w.__hanzoUi.root.appendChild(rip);
-    setTimeout(() => rip.remove(), 600);
+    const ui = w.__hanzoUi;
+    ui.cursor
+      .querySelector('[data-hz-arrow]')
+      ?.animate([{ transform: 'scale(1)' }, { transform: 'scale(.78)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+    [0, 110].forEach((delay, i) => {
+      const rip = document.createElement('div');
+      rip.style.cssText =
+        'position:absolute;width:' + (i ? 46 : 34) + 'px;height:' + (i ? 46 : 34) + 'px;border-radius:50%;opacity:0;border:2px solid rgba(74,163,255,' + (i ? '.55' : '.95') + ');background:rgba(74,163,255,' + (i ? '0' : '.18') + ');animation:hz-ripple .6s ease-out ' + delay + 'ms forwards;';
+      rip.style.left = ui.x + 'px';
+      rip.style.top = ui.y + 'px';
+      ui.root.appendChild(rip);
+      setTimeout(() => rip.remove(), 800);
+    });
   }
 
   if (a.type === 'scroll') {
