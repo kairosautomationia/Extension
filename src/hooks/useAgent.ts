@@ -172,6 +172,9 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               final = 'La pestaña ya no es una página web; me detuve.';
               break;
             }
+            // Desde el primer instante la página muestra que Hanzo está trabajando (borde, barra y cursor), también mientras el modelo piensa
+            if (cur) await inTab(tabId, injectedHighlight, [null, '']).catch(() => undefined);
+            check();
             // Sin página web (pestaña nueva): no hay elementos y lo único posible es abrir una dirección
             const snap = cur ? await inTab(tabId, injectedSnapshot, []) : { els: [], scrollY: 0, scrollMax: 0 };
             check();
