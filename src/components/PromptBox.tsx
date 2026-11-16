@@ -77,6 +77,14 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   const skillsRef = useRef<HTMLDivElement>(null);
   const voiceMenuRef = useRef<HTMLDivElement>(null);
   const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
+  const [voiceHover, setVoiceHover] = useState(false); // la flecha aparece al acercarte al micrófono
+  const [chevFlash, setChevFlash] = useState(false); // y unos segundos después de elegir un modo
+  const showChev = voiceHover || voiceMenuOpen || chevFlash;
+  useEffect(() => {
+    if (!chevFlash) return;
+    const t = setTimeout(() => setChevFlash(false), 2200);
+    return () => clearTimeout(t);
+  }, [chevFlash]);
   // Qué hace el botón del micrófono: dictar (voz a texto) o conversar con el agente de voz
   const [voiceMode, setVoiceMode] = useState<'dictado' | 'agente'>(() => {
     try {
@@ -423,11 +431,11 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 onClick={() => setSkillsOpen((o) => !o)}
                 aria-haspopup="dialog"
                 aria-expanded={skillsOpen}
-                className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-mute hover:bg-bubble hover:text-ink"
+                aria-label="Vínculos"
+                title="Vínculos"
+                className={`grid h-8 w-8 place-items-center rounded-full text-mute transition-colors hover:bg-bubble hover:text-ink ${skillsOpen ? 'bg-bubble text-ink' : ''}`}
               >
-                <Link2 size={13} />
-                Vínculos
-                <ChevronDown size={13} className={`transition-transform ${skillsOpen ? 'rotate-180' : ''}`} />
+                <Link2 size={16} />
               </button>
               <AnimatePresence>
                 {skillsOpen && (
@@ -483,18 +491,36 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
               </AnimatePresence>
             </div>
 
-            <div ref={voiceMenuRef} className="relative flex items-center">
-              <button
-                type="button"
-                onClick={() => setVoiceMenuOpen((o) => !o)}
-                aria-haspopup="menu"
-                aria-expanded={voiceMenuOpen}
-                aria-label="Elegir entre dictado y agente de voz"
-                title="Dictado o agente de voz"
-                className="grid h-8 w-5 place-items-center rounded-full text-mute transition-colors hover:bg-accent-soft hover:text-accent-ink"
-              >
-                <ChevronDown size={13} className={`transition-transform ${voiceMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
+            <div
+              ref={voiceMenuRef}
+              className="relative flex items-center"
+              onMouseEnter={() => setVoiceHover(true)}
+              onMouseLeave={() => setVoiceHover(false)}
+              onFocusCapture={() => setVoiceHover(true)}
+              onBlurCapture={() => setVoiceHover(false)}
+            >
+              {/* El espacio de la flecha está siempre reservado: al aparecer no mueve nada */}
+              <div className="grid h-8 w-8 place-items-center">
+                <AnimatePresence>
+                  {showChev && (
+                    <m.button
+                      type="button"
+                      initial={{ opacity: 0, scale: 0.5, x: 10 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.5, x: 10 }}
+                      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+                      onClick={() => setVoiceMenuOpen((o) => !o)}
+                      aria-haspopup="menu"
+                      aria-expanded={voiceMenuOpen}
+                      aria-label="Elegir entre dictado y agente de voz"
+                      title="Dictado o agente de voz"
+                      className={`grid h-7 w-7 place-items-center rounded-lg border border-line text-mute transition-colors hover:text-ink ${voiceMenuOpen ? 'bg-bubble text-ink' : 'bg-card'}`}
+                    >
+                      <ChevronDown size={14} className={`transition-transform duration-200 ${voiceMenuOpen ? 'rotate-180' : ''}`} />
+                    </m.button>
+                  )}
+                </AnimatePresence>
+              </div>
               <AnimatePresence>
                 {voiceMenuOpen && (
                   <m.div
@@ -520,6 +546,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                             dict.stop();
                             if (voice !== 'off') onVoiceToggle?.();
                             setVoiceMode(id);
+                            setChevFlash(true);
                             try {
                               localStorage.setItem('hanzo.voiceMode', id);
                             } catch {
