@@ -493,28 +493,42 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
 
             <div
               ref={voiceMenuRef}
-              className="relative flex items-center"
+              className="relative flex items-center rounded-xl"
               onMouseEnter={() => setVoiceHover(true)}
               onMouseLeave={() => setVoiceHover(false)}
               onFocusCapture={() => setVoiceHover(true)}
               onBlurCapture={() => setVoiceHover(false)}
             >
+              {/* Fondo de la pastilla: se despliega desde el micrófono hacia la izquierda */}
+              <AnimatePresence>
+                {showChev && (
+                  <m.span
+                    aria-hidden
+                    initial={{ opacity: 0, scaleX: 0.5 }}
+                    animate={{ opacity: 1, scaleX: 1 }}
+                    exit={{ opacity: 0, scaleX: 0.5 }}
+                    transition={{ type: 'spring', stiffness: 520, damping: 32 }}
+                    style={{ originX: 1 }}
+                    className="pointer-events-none absolute inset-0 rounded-xl bg-ink/[0.06]"
+                  />
+                )}
+              </AnimatePresence>
               {/* El espacio de la flecha está siempre reservado: al aparecer no mueve nada */}
-              <div className="grid h-8 w-8 place-items-center">
+              <div className="relative grid h-8 w-8 place-items-center">
                 <AnimatePresence>
                   {showChev && (
                     <m.button
                       type="button"
-                      initial={{ opacity: 0, scale: 0.5, x: 10 }}
+                      initial={{ opacity: 0, scale: 0.6, x: 16 }}
                       animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.5, x: 10 }}
-                      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+                      exit={{ opacity: 0, scale: 0.6, x: 16 }}
+                      transition={{ type: 'spring', stiffness: 520, damping: 30 }}
                       onClick={() => setVoiceMenuOpen((o) => !o)}
                       aria-haspopup="menu"
                       aria-expanded={voiceMenuOpen}
                       aria-label="Elegir entre dictado y agente de voz"
                       title="Dictado o agente de voz"
-                      className={`grid h-7 w-7 place-items-center rounded-lg border border-line text-mute transition-colors hover:text-ink ${voiceMenuOpen ? 'bg-bubble text-ink' : 'bg-card'}`}
+                      className={`grid h-8 w-8 place-items-center rounded-xl text-mute transition-colors hover:text-ink ${voiceMenuOpen ? 'bg-ink/[0.16] text-ink' : 'bg-ink/[0.10]'}`}
                     >
                       <ChevronDown size={14} className={`transition-transform duration-200 ${voiceMenuOpen ? 'rotate-180' : ''}`} />
                     </m.button>
@@ -573,6 +587,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => {
+                  setChevFlash(true); // al seleccionar el icono se despliega la flecha
                   if (voiceMode === 'agente') {
                     dict.stop();
                     onVoiceToggle?.();
@@ -591,8 +606,8 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 }
                 aria-pressed={voiceMode === 'dictado' ? dict.listening : voice !== 'off'}
                 title={voiceMode === 'dictado' ? (dict.listening ? 'Te escucho: habla y se escribe (pulsa para terminar)' : 'Dictar: voz a texto') : voice === 'off' ? 'Agente de voz' : voice === 'connecting' ? 'Conectando…' : voice === 'speaking' ? 'Hanzo está hablando (pulsa para terminar)' : 'Te escucho (pulsa para terminar)'}
-                className={`relative grid h-8 w-8 place-items-center rounded-full transition-colors ${
-                  (voiceMode === 'dictado' ? !dict.listening : voice === 'off') ? 'text-mute hover:bg-accent-soft hover:text-accent-ink' : 'bg-accent text-white'
+                className={`relative grid h-8 w-8 place-items-center rounded-xl transition-colors ${
+                  (voiceMode === 'dictado' ? !dict.listening : voice === 'off') ? (showChev ? 'text-ink' : 'text-mute hover:bg-accent-soft hover:text-accent-ink') : 'bg-accent text-white'
                 }`}
               >
                 {((voiceMode === 'agente' && (voice === 'listening' || voice === 'speaking')) || (voiceMode === 'dictado' && dict.listening)) && (
