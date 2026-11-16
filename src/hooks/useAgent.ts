@@ -104,7 +104,13 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
 
       const getMode = (): PermissionMode => modeRef.current; // se lee en cada paso: el usuario puede cambiar de modo
       const finishTask = (answer: string) =>
-        patch(id, (m) => ({ ...m, answer, streaming: false, plan: m.plan && { ...m.plan, done: true } }));
+        // Al completar la tarea el plan se cierra solo; si algún paso quedó sin hacer, se deja abierto para ver cuál
+        patch(id, (m) => ({
+          ...m,
+          answer,
+          streaming: false,
+          plan: m.plan && { ...m.plan, done: true, open: m.plan.steps.some((s) => s.state === 'skipped') ? m.plan.open : false },
+        }));
 
       const runTask = async (task: string) => {
         if (getMode() === 'readonly') {
@@ -674,6 +680,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             plan: m.plan && {
               ...m.plan,
               done: true,
+              open: completed ? false : m.plan.open,
               steps: completed
                 ? m.plan.steps
                 : m.plan.steps.map((s) => (s.state === 'running' || s.state === 'pending' ? { ...s, state: 'skipped' } : s)),
