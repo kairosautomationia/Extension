@@ -783,7 +783,10 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
       if (!r) return done('No pude leer esta página. Las páginas internas del navegador (chrome://) y la tienda de extensiones no se pueden leer.');
       if (r.tables.length === 0)
         return done('No encontré tablas en esta página. Si los datos se ven como tabla pero no se extraen, la página los dibuja de otra forma: pídeme que los lea y los ordene.');
-      const parts = r.tables.map((t, i) => `## ${t.title || `Tabla ${i + 1}`}\n\n${tableToMarkdown(t.rows)}`);
+      const parts = r.tables.map(
+        (t, i) =>
+          `## ${t.title || `Tabla ${i + 1}`}\n\n${tableToMarkdown(t.rows)}${t.cut ? `\n\n_Solo se leyeron las primeras ${t.rows.length - 1} filas de esta tabla._` : ''}`,
+      );
       const extra = r.found > r.tables.length ? `\n\nHay ${r.found - r.tables.length} tablas más en la página que no se incluyeron (máximo ${r.tables.length}).` : '';
       const host = (await tabState(tabId))?.host;
       done(

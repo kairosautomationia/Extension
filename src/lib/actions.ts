@@ -129,21 +129,25 @@ export async function requestAct(
 /* ---------------- Funciones inyectadas en la página ---------------- */
 
 /** Lee las tablas visibles de la página (solo lectura): cada una con su título y sus filas de texto. */
-export function injectedTables(): { tables: { title: string; rows: string[][] }[]; found: number } {
+export function injectedTables(): { tables: { title: string; rows: string[][]; cut: boolean }[]; found: number } {
   const MAX_TABLES = 12;
-  const MAX_ROWS = 500;
+  const MAX_ROWS = 2000;
   const MAX_COLS = 40;
   const clean = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 400);
   const all = Array.from(document.querySelectorAll('table')).filter((t) => !t.closest('[data-hanzo-overlay]') && !t.parentElement?.closest('table'));
-  const tables: { title: string; rows: string[][] }[] = [];
+  const tables: { title: string; rows: string[][]; cut: boolean }[] = [];
   let found = 0;
   for (const t of all) {
     const st = getComputedStyle(t);
     if (st.display === 'none' || st.visibility === 'hidden') continue;
     const rows: string[][] = [];
+    let cut = false;
     for (const tr of Array.from(t.querySelectorAll('tr'))) {
       if (tr.closest('table') !== t) continue;
-      if (rows.length >= MAX_ROWS) break;
+      if (rows.length >= MAX_ROWS + 1) {
+        cut = true;
+        break;
+      }
       const row: string[] = [];
       for (const c of Array.from(tr.children)) {
         if (c.tagName !== 'TD' && c.tagName !== 'TH') continue;
@@ -168,7 +172,7 @@ export function injectedTables(): { tables: { title: string; rows: string[][] }[
         }
       }
     }
-    tables.push({ title: title.slice(0, 60), rows });
+    tables.push({ title: title.slice(0, 60), rows, cut });
   }
   return { tables, found };
 }
