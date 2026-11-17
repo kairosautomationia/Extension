@@ -349,7 +349,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         }
         if (!task) {
           setStep(0, 'skipped');
-          finishTask('Escribe la tarea después de `/pc`. Ejemplo: `/pc abre el bloc de notas y escribe "hola"`.');
+          finishTask('Escribe la tarea después de /pc. Ejemplo: **/pc abre el bloc de notas y escribe "hola"**.');
           return;
         }
         setStep(0, 'running');
