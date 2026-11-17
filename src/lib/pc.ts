@@ -142,7 +142,7 @@ export function installHelp(kind: PcError['kind']): string {
     kind === 'forbidden'
       ? 'Hanzo PC está instalado, pero para otro ID de extensión (pasa si moviste la carpeta de la extensión).'
       : 'Para manejar apps de escritorio necesito **Hanzo PC** instalado en esta computadora (una sola vez).';
-  return `${head}\n\n1. Abre la carpeta **pc-host** del proyecto.\n2. Doble clic en **instalar.bat**.\n3. Cuando lo pida, pega este ID:\n\n**${id}**\n\nDespués vuelve a pedirme la tarea con /pc.`;
+  return `${head}\n\n1. Abre la carpeta **pc-host** del proyecto.\n2. Doble clic en **instalar.bat** (detecta solo esta extensión).\n3. En chrome://extensions pulsa **Recargar** en Hanzo y vuelve a pedirme la tarea.\n\nSi el instalador te pide el ID, es este: **${id}**`;
 }
 
 /** Pide al Worker la siguiente acción de escritorio (una sola). */
