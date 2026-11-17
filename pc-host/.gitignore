@@ -1,0 +1,6 @@
+config.json
+hanzo_pc.log
+hanzo_pc.old.log
+hanzo_pc_run.bat
+com.kairos.hanzo_pc.json
+__pycache__/

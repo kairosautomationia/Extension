@@ -4,6 +4,7 @@ import { describeAction as describeRecorded } from '../lib/flows';
 import { hostOf, injectedFind, injectedReplayAct, injectedScrollTo, sameUrl, waitReady, type FindRes } from '../lib/replay';
 import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
 import { tableToMarkdown } from '../lib/exportDoc';
+import { describePc, installHelp, parsePc, PC_MAX_STEPS, PcConn, PcError, pcResultText, pcRisky, requestPc, type PcPlan, type PcSnapshot } from '../lib/pc';
 import {
   MAX_STEPS,
   type ActPlan,
@@ -44,6 +45,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
   const approvalRef = useRef<((ok: boolean) => void) | null>(null);
   const runningRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const pcRef = useRef<PcConn | null>(null); // conexión con Hanzo PC durante una tarea /pc
   const messagesRef = useRef<Message[]>([]);
   const modeRef = useRef<PermissionMode>(mode);
   const onCaptureRef = useRef(opts.onCapture);
@@ -83,8 +85,10 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
 
       const id = uid();
       const taskText = parseTask(text);
-      const isTask = taskText !== null;
-      const baseSteps: Omit<PlanStep, 'id' | 'state'>[] = isTask ? [{ code: 'snapshot()', label: 'Preparar la pestaña' }] : READ_STEPS;
+      const pcText = taskText === null ? parsePc(text) : null;
+      const isTask = taskText !== null || pcText !== null;
+      const baseSteps: Omit<PlanStep, 'id' | 'state'>[] =
+        pcText !== null ? [{ code: 'connect("hanzo_pc")', label: 'Conectar con Hanzo PC' }] : isTask ? [{ code: 'snapshot()', label: 'Preparar la pestaña' }] : READ_STEPS;
       const steps: PlanStep[] = baseSteps.map((s) => ({
         ...s,
         id: uid(),
@@ -336,7 +340,180 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         finishTask(final);
       };
 
+      /** "/pc <tarea>": el mismo ciclo que /hacer, pero sobre ventanas de Windows a través de Hanzo PC. */
+      const runPc = async (task: string) => {
+        if (getMode() === 'readonly') {
+          setStep(0, 'skipped');
+          finishTask('Estás en modo **Solo lectura**. Cambia a Manual o Automático para que pueda usar apps de escritorio.');
+          return;
+        }
+        if (!task) {
+          setStep(0, 'skipped');
+          finishTask('Escribe la tarea después de `/pc`. Ejemplo: `/pc abre el bloc de notas y escribe "hola"`.');
+          return;
+        }
+        setStep(0, 'running');
+        const conn = new PcConn();
+        pcRef.current = conn;
+        let info: Record<string, unknown>;
+        try {
+          conn.connect();
+          info = await conn.call('ping', {}, 15000);
+          check();
+        } catch (e) {
+          check();
+          conn.close();
+          setStep(0, 'skipped');
+          const kind = e instanceof PcError ? e.kind : 'closed';
+          finishTask(kind === 'missing' || kind === 'forbidden' ? installHelp(kind) : `No pude conectar con Hanzo PC: ${e instanceof Error ? e.message : 'error desconocido'}`);
+          return;
+        }
+        if (info.error) {
+          conn.close();
+          setStep(0, 'skipped');
+          finishTask(String(info.error));
+          return;
+        }
+        setStep(0, 'done');
+        const apps = (info.apps as string[]) ?? [];
+        const folders = (info.folders as string[]) ?? [];
+
+        let stepCount = 1;
+        const addStep = (code: string, label: string, state: PlanStep['state']) => {
+          const i = stepCount++;
+          patch(id, (m) => ({
+            ...m,
+            plan: m.plan && { ...m.plan, steps: [...m.plan.steps, { id: uid(), code, label, state }] },
+          }));
+          return i;
+        };
+        const approve = async (desc: string) => {
+          patch(id, (m) => ({ ...m, approval: { action: desc, state: 'pending' } }));
+          const ok = await new Promise<boolean>((resolve) => {
+            approvalRef.current = resolve;
+          });
+          approvalRef.current = null;
+          check();
+          patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: ok ? 'approved' : 'rejected' } }));
+          return ok;
+        };
+
+        const history: string[] = [];
+        let final = `Llegué al límite de ${PC_MAX_STEPS} pasos y me detuve por seguridad. Revisa cómo quedó la ventana.`;
+        let bad = 0;
+        try {
+          for (let n = 0; n < PC_MAX_STEPS; n++) {
+            check();
+            if (getMode() === 'readonly') {
+              final = 'Cambiaste a Solo lectura; me detuve.';
+              break;
+            }
+            let snap: PcSnapshot;
+            try {
+              snap = (await conn.call('snapshot', {}, 25000)) as unknown as PcSnapshot;
+            } catch (e) {
+              check();
+              final = `No pude leer las ventanas: ${e instanceof Error ? e.message : 'error'}`;
+              break;
+            }
+            check();
+
+            const ctrl = new AbortController();
+            abortRef.current = ctrl;
+            let plan: PcPlan;
+            try {
+              plan = await requestPc(
+                { task, window: snap.window, windows: snap.windows ?? [], elements: snap.els ?? [], apps, folders, history },
+                ctrl.signal,
+              );
+            } catch (err) {
+              check();
+              final = `No pude contactar al modelo: ${err instanceof Error ? err.message : 'error desconocido'}`;
+              break;
+            }
+            check();
+
+            const a = plan.action;
+            if (a.type === 'done' || a.type === 'ask') {
+              final = plan.say || (a.type === 'done' ? 'Listo.' : 'Necesito más datos.');
+              break;
+            }
+            const el = a.id !== undefined ? (snap.els ?? []).find((e) => e.id === a.id) : undefined;
+            const win = a.window !== undefined ? (snap.windows ?? []).find((w) => w.id === a.window) : undefined;
+            if ((a.type === 'click' || a.type === 'type') && !el) {
+              history.push('Acción inválida: ese elemento no existe');
+              if (++bad >= 3) {
+                final = 'No logré decidir una acción segura. Prueba con una tarea más concreta.';
+                break;
+              }
+              continue;
+            }
+            const desc = describePc(a, el, win);
+            if (el?.risk === 'blocked') {
+              addStep(`${a.type}(#${el.id})`, `Bloqueado: ${desc}`, 'skipped');
+              history.push(`BLOQUEADO: «${el.label}» es un campo de contraseña; no puedes usarlo`);
+              if (++bad >= 3) {
+                final = 'La tarea requiere un campo de contraseña. Eso lo debes llenar tú.';
+                break;
+              }
+              continue;
+            }
+            bad = 0;
+            const code = a.type === 'click' || a.type === 'type' ? `${a.type}(#${a.id})` : `${a.type}()`;
+            const si = addStep(code, desc.charAt(0).toUpperCase() + desc.slice(1), 'running');
+            const risky = pcRisky(a, el);
+            // Leer o buscar no cambia nada: no pide permiso. Lo demás se aprueba en Manual, y lo sensible siempre.
+            const readOnly = a.type === 'find_file' || a.type === 'excel_read';
+            if (!readOnly && (getMode() === 'manual' || risky)) {
+              if (!(await approve(desc + (risky ? ' (acción sensible)' : '')))) {
+                setStep(si, 'skipped');
+                final = 'Rechazaste la acción; detuve la tarea.';
+                break;
+              }
+            }
+            const args: Record<string, unknown> =
+              a.type === 'open'
+                ? { app: a.app }
+                : a.type === 'focus'
+                  ? { window: a.window }
+                  : a.type === 'click'
+                    ? { el: a.id }
+                    : a.type === 'type'
+                      ? { el: a.id, text: a.text }
+                      : a.type === 'key'
+                        ? { keys: a.keys }
+                        : a.type === 'find_file'
+                          ? { name: a.name }
+                          : { path: a.path, cell: a.cell, text: a.text, sheet: a.sheet };
+            try {
+              const r = await conn.call(a.type, args, a.type === 'open' ? 20000 : 30000);
+              check();
+              setStep(si, 'done');
+              history.push(`${desc} → ${pcResultText(a, r)}`);
+            } catch (e) {
+              check();
+              setStep(si, 'skipped');
+              const msg = e instanceof Error ? e.message : 'sin respuesta';
+              history.push(`${desc} → FALLÓ: ${msg}`);
+              if (e instanceof PcError && e.kind !== 'host') {
+                final = `Se perdió la conexión con Hanzo PC: ${msg}`;
+                break;
+              }
+            }
+            await sleep(a.type === 'open' ? 800 : 400); // deja que la ventana reaccione
+          }
+        } finally {
+          conn.close();
+          if (pcRef.current === conn) pcRef.current = null;
+        }
+        finishTask(final);
+      };
+
       try {
+        if (pcText !== null) {
+          await runPc(pcText);
+          return;
+        }
         if (taskText !== null) {
           await runTask(taskText);
           return;
@@ -721,6 +898,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
   const stop = useCallback(() => {
     cancelRef.current.cancelled = true;
     abortRef.current?.abort();
+    pcRef.current?.close(); // corta al instante la acción de escritorio en curso
     approvalRef.current?.(false);
     approvalRef.current = null;
     runningRef.current = false;

@@ -1,7 +1,7 @@
 import { shrinkImage } from '../lib/image';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, MousePointerClick, Paperclip, Plus, Square, Table, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, Monitor, MousePointerClick, Paperclip, Plus, Square, Table, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
 import { AI_TARGETS, askInAi } from '../lib/aiLinks';
 import type { VoiceState } from '../hooks/useVoiceAgent';
@@ -19,7 +19,10 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 
 /** Comandos tipo skill: al escribir "/" aparecen y, una vez elegidos, se resaltan en azul. */
-const COMMANDS = [{ name: '/hacer', desc: 'Actúa en la página: clic, escribir y desplazar' }];
+const COMMANDS = [
+  { name: '/hacer', desc: 'Actúa en la página: clic, escribir y desplazar', icon: MousePointerClick },
+  { name: '/pc', desc: 'Usa apps de tu computadora: abrir, escribir, teclas y Excel', icon: Monitor },
+];
 
 const menuAnim = {
   initial: { opacity: 0, y: 6, scale: 0.97 },
@@ -221,7 +224,7 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
                 className="flex w-full items-center gap-3 rounded-lg bg-blue-500/10 p-2.5 text-left"
               >
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                  <MousePointerClick size={16} />
+                  <c.icon size={16} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold leading-tight text-blue-600 dark:text-blue-400">{c.name}</span>
