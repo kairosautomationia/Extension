@@ -22,7 +22,7 @@ export interface Snapshot {
   scrollMax: number;
 }
 export interface ActAction {
-  type: 'click' | 'type' | 'scroll' | 'open' | 'desktop' | 'done' | 'ask';
+  type: 'click' | 'type' | 'scroll' | 'open' | 'done' | 'ask';
   id?: number;
   text?: string;
   url?: string;
@@ -43,7 +43,7 @@ export function parseTask(t: string): string | null {
 
 /** Separa el comando del resto: "/hacer abre X" → { head:'', cmd:'/hacer', rest:' abre X' }. */
 export function splitCommand(t: string): { head: string; cmd: string; rest: string } | null {
-  const m = t.match(/^(\s*)(\/(?:hacer|accion|acci[oó]n|pc|escritorio))(?=\s|$)([\s\S]*)$/i);
+  const m = t.match(/^(\s*)(\/(?:hacer|accion|acci[oó]n))(?=\s|$)([\s\S]*)$/i);
   return m ? { head: m[1], cmd: m[2], rest: m[3] } : null;
 }
 

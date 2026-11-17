@@ -1,7 +1,7 @@
 import { shrinkImage } from '../lib/image';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'framer-motion';
-import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, Monitor, MousePointerClick, Paperclip, Plus, Square, Table, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, Check, ChevronDown, ExternalLink, FileText, Globe, Link2, Loader2, Mic, MousePointerClick, Paperclip, Plus, Square, Table, X } from 'lucide-react';
 import { BRANDS } from '../lib/brands';
 import { AI_TARGETS, askInAi } from '../lib/aiLinks';
 import type { VoiceState } from '../hooks/useVoiceAgent';
@@ -21,7 +21,6 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 /** Comandos tipo skill: al escribir "/" aparecen y, una vez elegidos, se resaltan en azul. */
 const COMMANDS = [
   { name: '/hacer', desc: 'Actúa en esta página web', icon: MousePointerClick, tone: 'text-blue-600 bg-blue-500/10 dark:text-blue-400' },
-  { name: '/pc', desc: 'Usa apps de tu computadora y Excel', icon: Monitor, tone: 'text-violet-600 bg-violet-500/10 dark:text-violet-400' },
 ];
 
 const menuAnim = {

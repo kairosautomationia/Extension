@@ -10,8 +10,7 @@
     "scripting",
     "contextMenus",
     "storage",
-    "tabGroups",
-    "nativeMessaging"
+    "tabGroups"
   ],
   "host_permissions": [
     "<all_urls>"
