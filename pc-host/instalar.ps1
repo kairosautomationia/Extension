@@ -1,26 +1,42 @@
 ﻿# Instalador de Hanzo PC: registra el componente Python en Chrome para que la extension Hanzo pueda usar apps de escritorio.
 param([string]$ExtensionId = "")
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $hostName = "com.kairos.hanzo_pc"
 
 Write-Host ""
 Write-Host "=== Instalador de Hanzo PC ===" -ForegroundColor Cyan
 
-# 1) Python real (no el acceso directo de la Microsoft Store)
-$py = $null
-foreach ($cmd in @("py -3", "python")) {
+# 1) Python: se acepta cualquiera que funcione (python.org, Microsoft Store, Anaconda o un entorno virtual)
+function Test-Py([string]$exe, [string[]]$pre = @()) {
   try {
-    $exe = (Invoke-Expression "$cmd -c `"import sys;print(sys.executable)`"" 2>$null | Select-Object -Last 1)
-    if ($exe -and (Test-Path $exe) -and ($exe -notmatch 'WindowsApps')) { $py = $exe.Trim(); break }
+    $out = & $exe @pre -c "import sys; assert sys.version_info >= (3, 8); print(sys.executable)" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $out) { return ($out | Select-Object -Last 1).Trim() }
   } catch {}
+  return $null
+}
+$py = $null
+$tries = @(@("py", @("-3")), @("python", @()), @("python3", @()))
+foreach ($t in $tries) { if (-not $py) { $py = Test-Py $t[0] $t[1] } }
+if (-not $py) {
+  $cands = @()
+  $cands += Get-ChildItem "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe" -ErrorAction SilentlyContinue
+  $cands += Get-ChildItem "$env:ProgramFiles\Python3*\python.exe" -ErrorAction SilentlyContinue
+  $cands += Get-ChildItem "C:\Python3*\python.exe" -ErrorAction SilentlyContinue
+  $cands += Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WindowsApps\python3*.exe" -ErrorAction SilentlyContinue
+  foreach ($d in @("anaconda3", "miniconda3", "Anaconda3", "Miniconda3")) { $cands += Get-ChildItem "$env:USERPROFILE\$d\python.exe" -ErrorAction SilentlyContinue }
+  $cands += Get-ChildItem "$env:USERPROFILE\*\Scripts\python.exe" -ErrorAction SilentlyContinue
+  foreach ($c in $cands) { if (-not $py) { $py = Test-Py $c.FullName } }
 }
 if (-not $py) { Write-Host "No encontre Python. Instalalo desde python.org (marca 'Add python.exe to PATH') y vuelve a ejecutar." -ForegroundColor Red; exit 1 }
 Write-Host "Python: $py"
+& $py -m pip --version *> $null
+if ($LASTEXITCODE -ne 0) { & $py -m ensurepip --upgrade *> $null }
 
 # 2) Librerias
 Write-Host "Instalando librerias (pywinauto, openpyxl, psutil)..."
-& $py -m pip install --user --upgrade --quiet pywinauto openpyxl psutil
+$inVenv = (& $py -c "import sys; print(int(sys.prefix != sys.base_prefix))").Trim() -eq "1"
+if ($inVenv) { & $py -m pip install --upgrade --quiet pywinauto openpyxl psutil } else { & $py -m pip install --user --upgrade --quiet pywinauto openpyxl psutil }
 if ($LASTEXITCODE -ne 0) { Write-Host "No se pudieron instalar las librerias. Revisa tu conexion e intenta de nuevo." -ForegroundColor Red; exit 1 }
 & $py -c "import pywinauto, openpyxl, psutil"
 if ($LASTEXITCODE -ne 0) { Write-Host "Las librerias no cargan correctamente." -ForegroundColor Red; exit 1 }
