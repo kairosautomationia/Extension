@@ -20,8 +20,8 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 /** Comandos tipo skill: al escribir "/" aparecen y, una vez elegidos, se resaltan en azul. */
 const COMMANDS = [
-  { name: '/hacer', desc: 'Actúa en la página: clic, escribir y desplazar', icon: MousePointerClick },
-  { name: '/pc', desc: 'Usa apps de tu computadora: abrir, escribir, teclas y Excel', icon: Monitor },
+  { name: '/hacer', desc: 'Actúa en esta página web', icon: MousePointerClick, tone: 'text-blue-600 bg-blue-500/10 dark:text-blue-400' },
+  { name: '/pc', desc: 'Usa apps de tu computadora y Excel', icon: Monitor, tone: 'text-violet-600 bg-violet-500/10 dark:text-violet-400' },
 ];
 
 const menuAnim = {
@@ -197,6 +197,9 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
   // Menú de comandos: aparece al escribir "/" al inicio, antes del primer espacio
   const typed = text.toLowerCase();
   const menu = text.startsWith('/') && !/\s/.test(text) ? COMMANDS.filter((c) => c.name.startsWith(typed)) : [];
+  const [cmdIdx, setCmdIdx] = useState(0);
+  const cmdKey = menu.map((c) => c.name).join();
+  useEffect(() => setCmdIdx(0), [cmdKey]);
   const pickCommand = (name: string) => {
     setText(name + ' ');
     taRef.current?.focus();
@@ -211,27 +214,35 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
             {...menuAnim}
             role="listbox"
             aria-label="Comandos"
-            className="absolute inset-x-3 bottom-full z-40 mb-1 rounded-xl border border-line bg-card p-1.5 shadow-pop"
+            className="absolute inset-x-3 bottom-full z-40 mb-1.5 rounded-xl border border-line bg-card p-1 shadow-pop"
           >
-            <p className="px-2.5 pb-1.5 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-mute">Habilidades</p>
-            {menu.map((c) => (
-              <button
-                key={c.name}
-                role="option"
-                aria-selected
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pickCommand(c.name)}
-                className="flex w-full items-center gap-3 rounded-lg bg-blue-500/10 p-2.5 text-left"
-              >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                  <c.icon size={16} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold leading-tight text-blue-600 dark:text-blue-400">{c.name}</span>
-                  <span className="mt-0.5 block text-xs leading-snug text-mute">{c.desc}</span>
-                </span>
-              </button>
-            ))}
+            <div className="flex items-center justify-between px-2 pb-1 pt-0.5">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-mute">Habilidades</p>
+              <p className="text-[10.5px] text-mute">↑↓ elegir · Enter usar</p>
+            </div>
+            {menu.map((c, i) => {
+              const active = i === cmdIdx;
+              return (
+                <button
+                  key={c.name}
+                  role="option"
+                  aria-selected={active}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setCmdIdx(i)}
+                  onClick={() => pickCommand(c.name)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${active ? 'bg-ink/[0.06] dark:bg-white/[0.07]' : ''}`}
+                >
+                  <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${c.tone}`}>
+                    <c.icon size={14} strokeWidth={2.2} />
+                  </span>
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block text-[13px] font-semibold text-ink">{c.name}</span>
+                    <span className="block truncate text-[11.5px] text-mute">{c.desc}</span>
+                  </span>
+                  {active && <span className="shrink-0 rounded border border-line px-1 text-[10px] text-mute">Enter</span>}
+                </button>
+              );
+            })}
           </m.div>
         )}
       </AnimatePresence>
@@ -348,9 +359,20 @@ export default function PromptBox({ tab, running, onSend, onStop, draftSeed, rec
             onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return;
+              if (menu.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                e.preventDefault();
+                const d = e.key === 'ArrowDown' ? 1 : -1;
+                setCmdIdx((i) => (i + d + menu.length) % menu.length);
+                return;
+              }
+              if (menu.length > 0 && e.key === 'Escape') {
+                e.preventDefault();
+                setText('');
+                return;
+              }
               if (menu.length > 0 && (e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
                 e.preventDefault();
-                pickCommand(menu[0].name);
+                pickCommand(menu[Math.min(cmdIdx, menu.length - 1)].name);
                 return;
               }
               if (e.key === 'Enter' && !e.shiftKey) {
