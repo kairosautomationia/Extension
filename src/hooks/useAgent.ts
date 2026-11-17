@@ -380,7 +380,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
           conn.close();
           setStep(0, 'skipped');
           const kind = e instanceof PcError ? e.kind : 'closed';
-          finishTask(kind === 'missing' || kind === 'forbidden' ? installHelp(kind) : `No pude conectar con Hanzo PC: ${e instanceof Error ? e.message : 'error desconocido'}`);
+          finishTask(kind === 'missing' || kind === 'forbidden' || kind === 'reload' ? installHelp(kind) : `No pude conectar con Hanzo PC: ${e instanceof Error ? e.message : 'error desconocido'}`);
           return;
         }
         if (info.error) {

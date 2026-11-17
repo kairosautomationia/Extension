@@ -62,7 +62,7 @@ export function autoDesktop(t: string): string | null {
 export class PcError extends Error {
   constructor(
     message: string,
-    public kind: 'missing' | 'forbidden' | 'closed' | 'timeout' | 'host',
+    public kind: 'missing' | 'forbidden' | 'closed' | 'timeout' | 'host' | 'reload',
   ) {
     super(message);
   }
@@ -76,6 +76,10 @@ export class PcConn {
   private closedErr: PcError | null = null;
 
   connect(): void {
+    // Sin el permiso "nativeMessaging" activo (la extensión no se recargó tras actualizarla) la función no existe
+    if (typeof chrome.runtime?.connectNative !== 'function') {
+      throw new PcError('Falta recargar Hanzo para activar el permiso de apps de escritorio.', 'reload');
+    }
     this.port = chrome.runtime.connectNative(PC_HOST);
     this.port.onMessage.addListener((msg: Record<string, unknown>) => {
       const p = this.pending.get(Number(msg.id));
@@ -137,6 +141,8 @@ export class PcConn {
 
 /** Instrucciones de instalación con el ID real de esta extensión. */
 export function installHelp(kind: PcError['kind']): string {
+  if (kind === 'reload')
+    return 'Falta un paso: abre **chrome://extensions** y pulsa **Recargar** (⟳) en la tarjeta de Hanzo. Así se activa el permiso para usar apps de tu computadora. Luego vuelve a pedirme la tarea.';
   const id = chrome.runtime?.id ?? '(ID de la extensión)';
   const head =
     kind === 'forbidden'
