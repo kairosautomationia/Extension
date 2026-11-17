@@ -38,6 +38,9 @@ const READ_STEPS: Omit<PlanStep, 'id' | 'state'>[] = [
  * - "/hacer <tarea>": bucle de acciones (clic, escribir, desplazar) en la pestaña activa, de a UNA acción,
  *   con aprobación según el modo, campos sensibles bloqueados, tope de pasos y botón Detener.
  */
+const PC_PENDING_KEY = 'hanzo.pendingPc';
+const PC_RELOADED_KEY = 'hanzo.pcReloadedAt';
+
 export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; onFlowRun?: (flowId: string, result: 'ok' | 'fail', note?: string) => void } = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [running, setRunning] = useState(false);
@@ -380,6 +383,26 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
           conn.close();
           setStep(0, 'skipped');
           const kind = e instanceof PcError ? e.kind : 'closed';
+          // Falta el permiso porque Chrome no recargó la extensión: se recarga sola (una vez) y retoma la tarea al reabrir
+          if (kind === 'reload') {
+            let last = 0;
+            try {
+              last = Number(localStorage.getItem(PC_RELOADED_KEY) ?? 0);
+            } catch {
+              /* sin almacenamiento */
+            }
+            if (Date.now() - last > 5 * 60_000) {
+              try {
+                localStorage.setItem(PC_RELOADED_KEY, String(Date.now()));
+                localStorage.setItem(PC_PENDING_KEY, JSON.stringify({ text, t: Date.now() }));
+              } catch {
+                /* sin almacenamiento */
+              }
+              finishTask('Activando el permiso para usar apps de tu computadora… Hanzo se recargará en un momento. **Vuelve a abrir Hanzo** y continuaré la tarea solo.');
+              setTimeout(() => chrome.runtime.reload(), 1500);
+              return;
+            }
+          }
           finishTask(kind === 'missing' || kind === 'forbidden' || kind === 'reload' ? installHelp(kind) : `No pude conectar con Hanzo PC: ${e instanceof Error ? e.message : 'error desconocido'}`);
           return;
         }
@@ -992,6 +1015,21 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
       setRunning(false);
     }
   }, [patch]);
+
+  // Tarea /pc pendiente tras la recarga automática: se retoma sola al abrir el panel
+  useEffect(() => {
+    let pending: { text?: string; t?: number } | null = null;
+    try {
+      pending = JSON.parse(localStorage.getItem(PC_PENDING_KEY) ?? 'null');
+      localStorage.removeItem(PC_PENDING_KEY);
+    } catch {
+      pending = null;
+    }
+    if (pending?.text && Date.now() - Number(pending.t ?? 0) < 10 * 60_000) {
+      const t = setTimeout(() => void send(pending!.text!), 400);
+      return () => clearTimeout(t);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { messages, running, send, replay, stop, resolveApproval, togglePlan, reset, load, extractTables };
 }
