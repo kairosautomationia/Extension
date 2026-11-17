@@ -768,6 +768,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
   const extractTables = useCallback(async () => {
     if (runningRef.current) return;
     runningRef.current = true;
+    setRunning(true); // bloquea el envío mientras se leen las tablas, para no perder lo que se escriba
     const id = uid();
     setMessages((ms) => [
       ...ms,
@@ -792,6 +793,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
       done('No pude leer las tablas de esta página.');
     } finally {
       runningRef.current = false;
+      setRunning(false);
     }
   }, [patch]);
 

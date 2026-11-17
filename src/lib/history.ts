@@ -10,6 +10,14 @@ export interface StoredChat {
 
 const KEY = 'hanzo.chats';
 const MAX_CHATS = 50;
+/** Tope por respuesta guardada: una tabla extraída enorme no debe llenar el almacenamiento y borrar chats antiguos. */
+const MAX_SAVED_ANSWER = 40_000;
+
+function trimAnswer(a: string | undefined): string | undefined {
+  if (!a || a.length <= MAX_SAVED_ANSWER) return a;
+  const cut = a.lastIndexOf('\n', MAX_SAVED_ANSWER);
+  return `${a.slice(0, cut > 0 ? cut : MAX_SAVED_ANSWER)}\n\n_(Respuesta recortada en el historial por su tamaño. Para descargarla completa, vuelve a pedirla o a extraer las tablas.)_`;
+}
 
 export function loadChats(): StoredChat[] {
   try {
@@ -41,6 +49,7 @@ function clean(messages: Message[]): Message[] {
     if (m.role === 'user') return { ...m, attachments: m.attachments.map((a) => ({ id: a.id, kind: a.kind, name: a.name })) };
     return {
       ...m,
+      answer: trimAnswer(m.answer),
       streaming: false,
       approval: undefined,
       plan: m.plan && {
