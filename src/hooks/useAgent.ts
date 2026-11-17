@@ -4,7 +4,7 @@ import { describeAction as describeRecorded } from '../lib/flows';
 import { hostOf, injectedFind, injectedReplayAct, injectedScrollTo, sameUrl, waitReady, type FindRes } from '../lib/replay';
 import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
 import { tableToMarkdown } from '../lib/exportDoc';
-import { describePc, installHelp, parsePc, PC_MAX_STEPS, PcConn, PcError, pcResultText, pcRisky, requestPc, type PcPlan, type PcSnapshot } from '../lib/pc';
+import { autoDesktop, describePc, installHelp, parsePc, PC_MAX_STEPS, PcConn, PcError, pcResultText, pcRisky, requestPc, type PcPlan, type PcSnapshot } from '../lib/pc';
 import {
   MAX_STEPS,
   type ActPlan,
@@ -85,7 +85,8 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
 
       const id = uid();
       const taskText = parseTask(text);
-      const pcText = taskText === null ? parsePc(text) : null;
+      // /pc explícito, o una orden clara de abrir una app de escritorio escrita sin comando
+      const pcText = taskText === null ? (parsePc(text) ?? autoDesktop(text)) : null;
       const isTask = taskText !== null || pcText !== null;
       const baseSteps: Omit<PlanStep, 'id' | 'state'>[] =
         pcText !== null ? [{ code: 'connect("hanzo_pc")', label: 'Conectar con Hanzo PC' }] : isTask ? [{ code: 'snapshot()', label: 'Preparar la pestaña' }] : READ_STEPS;
@@ -160,6 +161,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         const history: string[] = [];
         let final = `Llegué al límite de ${MAX_STEPS} pasos y me detuve por seguridad. Revisa cómo quedó la página.`;
         let bad = 0;
+        let toDesktop = false; // la tarea es de una app de la computadora: se pasa sola a /pc
         try {
           for (let n = 0; n < MAX_STEPS; n++) {
             check();
@@ -214,6 +216,10 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             const a = plan.action;
             if (a.type === 'done' || a.type === 'ask') {
               final = plan.say || (a.type === 'done' ? 'Listo.' : 'Necesito más datos.');
+              break;
+            }
+            if (a.type === 'desktop') {
+              toDesktop = true;
               break;
             }
             if (a.type === 'open') {
@@ -337,6 +343,15 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         } finally {
           inTab(tabId, injectedClear, []).catch(() => {});
         }
+        if (toDesktop) {
+          // Mismo mensaje, nuevo plan: ahora en el escritorio
+          patch(id, (m) => ({
+            ...m,
+            plan: m.plan && { ...m.plan, steps: [{ id: uid(), code: 'connect("hanzo_pc")', label: 'Conectar con Hanzo PC', state: 'pending' }] },
+          }));
+          await runPc(task);
+          return;
+        }
         finishTask(final);
       };
 
@@ -358,7 +373,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         let info: Record<string, unknown>;
         try {
           conn.connect();
-          info = await conn.call('ping', {}, 15000);
+          info = await conn.call('ping', {}, 30000);
           check();
         } catch (e) {
           check();

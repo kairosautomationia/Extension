@@ -48,6 +48,16 @@ export function parsePc(t: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+/**
+ * Orden clara de usar una app de escritorio escrita en el chat sin comando ("abre Excel y…").
+ * Es estricta a propósito: "¿cómo uso Excel?" sigue siendo una pregunta normal.
+ */
+export function autoDesktop(t: string): string | null {
+  const re =
+    /^\s*(?:hanzo[,:]?\s+)?(?:por\s+favor[,]?\s+)?(?:abre|abrir|[aá]breme|inicia|ejecuta|lanza)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+)?(?:bloc\s+de\s+notas|notepad|excel|word|paint)\b/i;
+  return re.test(t) ? t.trim() : null;
+}
+
 /** Error al conectar: falta instalar, ID distinto o el componente se cerró. */
 export class PcError extends Error {
   constructor(

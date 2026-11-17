@@ -206,11 +206,12 @@ async function runModel(env: Env, input: unknown): Promise<unknown> {
 // ---------- Acciones sobre la página (/api/act): el modelo propone UNA acción por turno ----------
 const ACT_SYSTEM = `Eres Hanzo y controlas la pestaña activa del usuario para cumplir UNA tarea.
 Respondes SOLO con un objeto JSON, sin texto extra ni bloques de código:
-{"say":"frase corta en español","action":{"type":"click|type|scroll|open|done|ask","id":0,"text":"","dir":"down|up","url":""}}
+{"say":"frase corta en español","action":{"type":"click|type|scroll|open|desktop|done|ask","id":0,"text":"","dir":"down|up","url":""}}
 Reglas:
 - Das UNA sola acción por turno.
 - click: "id" del elemento. type: "id" del campo y "text" con el texto completo (reemplaza el contenido). scroll: "dir" down o up para ver más elementos.
-- open: abre en esta pestaña una dirección web "url" (https). Úsalo cuando la pestaña es nueva o interna (no hay elementos) o cuando la tarea pide ir a otro sitio. Usa la dirección oficial del sitio (p. ej. https://www.youtube.com, https://mail.google.com) o, si no la sabes, una búsqueda https://www.google.com/search?q=términos. Con una pestaña nueva o interna tu primera acción debe ser open. Si el usuario pide abrir un programa de escritorio (no una web), responde ask explicando que Hanzo solo trabaja con páginas web.
+- open: abre en esta pestaña una dirección web "url" (https). Úsalo cuando la pestaña es nueva o interna (no hay elementos) o cuando la tarea pide ir a otro sitio. Usa la dirección oficial del sitio (p. ej. https://www.youtube.com, https://mail.google.com) o, si no la sabes, una búsqueda https://www.google.com/search?q=términos. Con una pestaña nueva o interna tu primera acción debe ser open. 
+- desktop: la tarea es sobre un programa o archivo de la computadora (Bloc de notas, Excel, Word, Paint, archivos .xlsx, el escritorio de Windows) y no sobre una página web. Responde desktop como PRIMERA acción y Hanzo la hará en el escritorio.
 - done: la tarea ya está cumplida o no se puede cumplir; en "say" explica el resultado en 1-2 frases.
 - ask: falta un dato que el usuario no dio (no lo inventes); en "say" pídelo.
 - Usa solo ids de la lista. Nunca inventes datos personales, claves ni números de tarjeta.
@@ -232,8 +233,8 @@ interface ActBody {
   history?: string[];
   scroll?: { y?: number; max?: number };
 }
-type ActType = 'click' | 'type' | 'scroll' | 'open' | 'done' | 'ask';
-const ACT_TYPES: ActType[] = ['click', 'type', 'scroll', 'open', 'done', 'ask'];
+type ActType = 'click' | 'type' | 'scroll' | 'open' | 'desktop' | 'done' | 'ask';
+const ACT_TYPES: ActType[] = ['click', 'type', 'scroll', 'open', 'desktop', 'done', 'ask'];
 
 function extractJson(text: string): Record<string, unknown> | null {
   const a = text.indexOf('{');
@@ -255,6 +256,7 @@ function validateAct(raw: Record<string, unknown> | null, els: ActEl[]): { say: 
   const fail = (msg: string) => ({ say: say || msg, action: { type: 'ask' as ActType } });
   if (!type) return fail('No pude decidir una acción segura.');
   if (type === 'done' || type === 'ask') return { say: say || (type === 'done' ? 'Listo.' : 'Necesito más datos.'), action: { type } };
+  if (type === 'desktop') return { say: say || 'Lo hago en tu computadora.', action: { type } };
   if (type === 'scroll') return { say, action: { type, dir: act.dir === 'up' ? 'up' : 'down' } };
   if (type === 'open') {
     try {

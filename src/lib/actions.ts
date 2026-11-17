@@ -22,7 +22,7 @@ export interface Snapshot {
   scrollMax: number;
 }
 export interface ActAction {
-  type: 'click' | 'type' | 'scroll' | 'open' | 'done' | 'ask';
+  type: 'click' | 'type' | 'scroll' | 'open' | 'desktop' | 'done' | 'ask';
   id?: number;
   text?: string;
   url?: string;

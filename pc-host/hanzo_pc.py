@@ -25,7 +25,8 @@ from pathlib import Path
 VERSION = "0.1.0"
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
-LOG_PATH = HERE / "hanzo_pc.log"
+_LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or HERE) / "HanzoPC"
+LOG_PATH = _LOG_DIR / "hanzo_pc.log"
 
 MAX_ELEMENTS = 80  # elementos que se le muestran al modelo por paso
 MAX_VISIT = 600  # nodos de la interfaz que se recorren como máximo (Excel puede tener miles)
@@ -79,6 +80,7 @@ def load_config() -> dict:
 
 def log(event: str, data: dict | None = None) -> None:
     try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
         with LOG_PATH.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"t": datetime.now().isoformat(timespec="seconds"), "e": event, **(data or {})}, ensure_ascii=False) + "\n")
         if LOG_PATH.stat().st_size > 2_000_000:  # rota el registro para que no crezca sin límite
@@ -444,22 +446,26 @@ class FakeBackend:
 # ---------------------------------------------------------------- protocolo
 
 def read_msg() -> dict | None:
-    raw = sys.stdin.buffer.read(4)
+    raw = _IN.read(4)
     if len(raw) < 4:
         return None
     (n,) = struct.unpack("<I", raw)
     if n > 1_000_000:
         return None
-    data = sys.stdin.buffer.read(n)
+    data = _IN.read(n)
     return json.loads(data.decode("utf-8"))
+
+
+_OUT = sys.stdout.buffer  # canal del protocolo (Chrome)
+_IN = sys.stdin.buffer
 
 
 def write_msg(obj: dict) -> None:
     data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     if len(data) > 900_000:
         data = json.dumps({"id": obj.get("id"), "ok": False, "error": "Respuesta demasiado grande."}).encode("utf-8")
-    sys.stdout.buffer.write(struct.pack("<I", len(data)) + data)
-    sys.stdout.buffer.flush()
+    _OUT.write(struct.pack("<I", len(data)) + data)
+    _OUT.flush()
 
 
 def handle(backend, cfg: dict, msg: dict) -> dict:
@@ -493,6 +499,8 @@ def main() -> None:
 
         msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
         msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+    # Cualquier print de una librería (pywinauto, comtypes) va a stderr y no corrompe los mensajes a Chrome
+    sys.stdout = sys.stderr
     cfg = load_config()
     backend_error = None
     backend = None
@@ -523,5 +531,56 @@ def main() -> None:
             log("error", {"op": msg.get("op"), "error": str(e)})
 
 
+# ---------------------------------------------------------------- utilidades del instalador
+
+def find_extension_ids(dist: str | None = None) -> list[str]:
+    """IDs de la extensión Hanzo cargada en Chrome o Edge (perfiles del usuario de Windows)."""
+    local = os.environ.get("LOCALAPPDATA", "")
+    roots = [Path(local) / "Google" / "Chrome" / "User Data", Path(local) / "Microsoft" / "Edge" / "User Data"]
+    want = os.path.normcase(os.path.normpath(dist)) if dist else None
+    ids: list[str] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for prof in root.iterdir():
+            for fn in ("Secure Preferences", "Preferences"):
+                f = prof / fn
+                if not f.is_file():
+                    continue
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8", errors="replace"))
+                except (OSError, ValueError):
+                    continue
+                settings = (data.get("extensions") or {}).get("settings") or {}
+                for ext_id, info in settings.items():
+                    path = (info or {}).get("path") if isinstance(info, dict) else None
+                    if not path or ext_id in ids:
+                        continue
+                    if not os.path.isabs(path):
+                        continue  # extensiones de la tienda: ruta relativa, no son Hanzo sin empaquetar
+                    same = want and os.path.normcase(os.path.normpath(path)) == want
+                    name_ok = False
+                    try:
+                        name_ok = json.loads((Path(path) / "manifest.json").read_text(encoding="utf-8")).get("name") == "Hanzo"
+                    except (OSError, ValueError):
+                        pass
+                    if same or name_ok:
+                        ids.append(ext_id)
+    return ids
+
+
+def warmup() -> None:
+    """La primera vez pywinauto genera código de Windows (puede tardar); se hace al instalar, no al usar /pc."""
+    from pywinauto import Desktop
+
+    Desktop(backend="uia").windows()
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--find-ids":
+        print("\n".join(find_extension_ids(sys.argv[2] if len(sys.argv) > 2 else None)))
+    elif len(sys.argv) > 1 and sys.argv[1] == "--warmup":
+        warmup()
+        print("ok")
+    else:
+        main()
