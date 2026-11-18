@@ -6,6 +6,7 @@ import { readPageContext, streamAgent, type ApiMessage } from '../lib/api';
 import { tableToMarkdown } from '../lib/exportDoc';
 import {
   MAX_STEPS,
+  STEP_BLOCK,
   type ActPlan,
   activeTabId,
   describeAction,
@@ -154,11 +155,29 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         };
 
         const history: string[] = [];
-        let final = `Llegué al límite de ${MAX_STEPS} pasos y me detuve por seguridad. Revisa cómo quedó la página.`;
+        let final = `Llegué al tope de ${MAX_STEPS} pasos y me detuve por seguridad. Revisa cómo quedó la página; si falta algo, pídemelo de nuevo desde ahí.`;
         let bad = 0;
+        const recent: string[] = []; // últimas acciones, para detectar que se quedó dando vueltas
         try {
           for (let n = 0; n < MAX_STEPS; n++) {
             check();
+            // Cada STEP_BLOCK pasos pregunta si sigue (también en Automático): una tarea larga no corre sin control
+            if (n > 0 && n % STEP_BLOCK === 0) {
+              patch(id, (m) => ({
+                ...m,
+                approval: { action: `seguir con la tarea: llevo ${n} pasos (hasta ${Math.min(STEP_BLOCK, MAX_STEPS - n)} más)`, state: 'pending' },
+              }));
+              const go = await new Promise<boolean>((resolve) => {
+                approvalRef.current = resolve;
+              });
+              approvalRef.current = null;
+              check();
+              patch(id, (m) => ({ ...m, approval: m.approval && { ...m.approval, state: go ? 'approved' : 'rejected' } }));
+              if (!go) {
+                final = `Me detuve después de ${n} pasos, como pediste. Revisa cómo quedó la página.`;
+                break;
+              }
+            }
             if (getMode() === 'readonly') {
               final = 'Cambiaste a Solo lectura; me detuve.';
               break;
@@ -328,6 +347,14 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             check();
             setStep(si, res?.ok ? 'done' : 'skipped');
             history.push(`${desc} → ${res?.ok ? 'OK' : `FALLÓ: ${res?.msg ?? 'sin respuesta'}`}`);
+            // Misma acción una y otra vez sin avanzar: se detiene (desplazarse puede repetirse más en páginas largas)
+            recent.push(desc);
+            const limit = a.type === 'scroll' ? 6 : 3;
+            const tail = recent.slice(-limit);
+            if (tail.length === limit && tail.every((d) => d === desc)) {
+              final = `Me quedé repitiendo «${desc}» sin avanzar, así que me detuve. Revisa la página o dame un detalle más de lo que buscas.`;
+              break;
+            }
             await sleep(900); // deja que la página reaccione
           }
         } finally {

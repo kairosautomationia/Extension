@@ -33,7 +33,9 @@ export interface ActPlan {
   action: ActAction;
 }
 
-export const MAX_STEPS = 12;
+/** Pasos seguidos antes de preguntar si sigue; tope absoluto por tarea. */
+export const STEP_BLOCK = 20;
+export const MAX_STEPS = 60;
 
 /** Tarea explícita: "/hacer …" (también "/accion" o "/acción"). Devuelve null si no lo es. */
 export function parseTask(t: string): string | null {

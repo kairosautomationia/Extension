@@ -293,7 +293,8 @@ async function handleAct(request: Request, env: Env): Promise<Response> {
     value: e.value ? String(e.value).slice(0, 40) : undefined,
     risk: e.risk === 'blocked' || e.risk === 'high' ? e.risk : ('normal' as const),
   }));
-  const history = (Array.isArray(b.history) ? b.history : []).slice(-12).map((h) => String(h ?? '').slice(0, 200));
+  // Memoria de la tarea: las últimas 25 acciones (las tareas largas llegan hasta 60 pasos)
+  const history = (Array.isArray(b.history) ? b.history : []).slice(-25).map((h) => String(h ?? '').slice(0, 200));
 
   const list = els
     .map((e) => `[${e.id}] ${e.kind} "${e.label}"${e.value ? ` valor="${e.value}"` : ''}${e.risk === 'blocked' ? ' (BLOQUEADO: no usar)' : ''}${e.risk === 'high' ? ' (sensible)' : ''}`)
