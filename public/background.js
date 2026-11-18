@@ -20,12 +20,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
 });
 
-// Botón fijo "Pregúntale a Hanzo": solo abre el panel (el clic del usuario en la página cuenta como gesto).
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (!msg || msg.type !== 'hanzo-open' || !sender.tab || sender.tab.windowId === undefined) return;
-  chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => {});
-});
-
 // "Preguntar a Hanzo" (burbuja al seleccionar texto): abre el panel y le deja el texto al panel.
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (!msg || msg.type !== 'hanzo-ask' || !sender.tab || sender.tab.windowId === undefined) return;
