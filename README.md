@@ -25,9 +25,10 @@ Comprime el contenido de `dist/` en un `.zip` y súbelo al Chrome Web Store Deve
 
 ## Notas
 
-- El agente usa un único modelo, `@cf/google/gemma-4-26b-a4b-it` (Workers AI, plan gratuito: 10 000 neuronas/día), vía el Worker `worker/index.ts` (`POST /api/agent`, streaming). Por ahora solo lee y analiza la pestaña activa; las acciones sobre la página están pendientes.
+- El agente usa un único modelo, `@cf/google/gemma-4-26b-a4b-it` (Workers AI, plan gratuito: 10 000 neuronas/día), vía el Worker `worker/index.ts` (`POST /api/agent`, streaming). Lee y analiza la pestaña activa y, con `/hacer`, actúa en ella (ver más abajo).
 - La URL del Worker (`https://extension.kairosautomation-ia.workers.dev`) está fija en `src/lib/api.ts`; puedes sobreescribirla con `VITE_API_URL` al compilar.
-- Permisos del manifest: `sidePanel`, `tabs`, `activeTab` y `<all_urls>` (necesario para la captura de pantalla).
+- Permisos del manifest: `sidePanel` (panel lateral), `tabs` y `activeTab` (pestaña activa), `scripting` y `<all_urls>` (leer y actuar en la página y capturarla), `contextMenus` (clic derecho → Hanzo), `storage` (flujos y avisos entre piezas) y `tabGroups` (grupo «Hanzo»). El script `content.js` corre en páginas http/https solo para la burbuja «Preguntar a Hanzo».
+- Privacidad: al preguntar en el chat, Hanzo lee el texto visible de la pestaña y lo envía al Worker; **en sitios de banca y pagos no lo lee** (solo recibe un aviso). La captura de pantalla solo se envía si tú la adjuntas.
 
 ## Despliegue en Cloudflare (Workers con assets estáticos)
 
@@ -57,12 +58,15 @@ Límites de seguridad:
 - **Solo lectura**: no actúa. **Manual**: pide aprobación antes de cada acción. **Automático**: solo aprueba solo lo de bajo riesgo; botones de pagar/enviar/eliminar/confirmar y envíos de formularios siempre piden aprobación.
 - Nunca escribe en campos de contraseña, tarjeta, CVV, cuentas, cédula/pasaporte ni archivos (se re-comprueba dentro de la página).
 - No actúa en sitios de banca y pagos (lista fija en `src/lib/actions.ts`).
-- Solo la pestaña activa; si cambia de sitio, se detiene. Máximo 12 pasos por tarea y botón Detener.
+- Solo la pestaña activa; si cambia de sitio, se detiene. Hasta 60 pasos por tarea, en bloques de 20: al completar cada bloque Hanzo pregunta si sigue (también en Automático). Si repite la misma acción sin avanzar, se detiene. Botón Detener siempre disponible.
 - El texto de la página se trata como dato, nunca como instrucciones. El Worker valida cada acción del modelo (ids, tipos, longitudes).
 - La acción se resalta con un recuadro naranja en la página antes de ejecutarse.
 
 ### Comando como habilidad
 Al escribir `/` en el chat aparece la habilidad **/hacer** (Enter o Tab la inserta) y queda resaltada en azul en el cuadro de texto y en el mensaje enviado.
+
+## Descargar lo que escribe Hanzo
+Bajo cada respuesta, el menú de descarga ofrece **PDF, Word, Excel, CSV y Markdown** (sin librerías externas; `src/lib/exportDoc.ts`). Las tablas de una respuesta salen como hojas de Excel, y la opción «Extraer tablas de la página» del menú **+** las trae de la pestaña activa sin pasar por el modelo.
 
 ## Grabar y repetir acciones
 1. Pulsa **Grabar** en la barra del chat y usa la página: se anotan clics, escritura, listas, casillas, Enter, desplazamientos y capturas de pantalla.
@@ -98,7 +102,7 @@ Cada grabación es un **flujo** con nombre, para qué sirve y etiquetas.
 - Búsqueda por nombre, uso, sitio o etiqueta, y filtro por etiquetas.
 - Cada tarjeta muestra los pasos, el sitio, cuántas veces se usó y cómo terminó la última repetición (salió bien / no terminó, con el motivo).
 - Repetir todo con un clic, o solo un paso; las aprobaciones y los límites de seguridad siguen igual.
-- **Exportar / importar** en un archivo `.json` para pasar flujos a otra persona. Lo importado se valida (tipos de acción, tamaños) y recibe ids nuevos.
+- **Exportar / importar** en un archivo `.md` (legible, con los pasos numerados) o `.json` para pasar flujos a otra persona. Lo importado se valida (tipos de acción, tamaños) y recibe ids nuevos.
 - Se guardan en `localStorage` y con respaldo en `chrome.storage.local`; si uno se borra, se recupera del otro.
 - Límite: 200 flujos y 80 pasos por flujo.
 

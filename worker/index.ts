@@ -104,12 +104,7 @@ async function handleComposio(env: Env): Promise<Response> {
     return json({ ok: true, tools: tools.length });
   } catch (e) {
     // Sin detalles técnicos: solo si falla la llave o el servicio
-    // Solo las 3 primeras letras (ck_ / ak_ …) para saber qué tipo de llave se guardó; nunca la llave
-    return json(
-      e instanceof Error && e.message === 'llave'
-        ? { ok: false, reason: 'bad-key', prefix: String(composioKey(env)).slice(0, 3) }
-        : { ok: false, reason: 'error' },
-    );
+    return json(e instanceof Error && e.message === 'llave' ? { ok: false, reason: 'bad-key' } : { ok: false, reason: 'error' });
   }
 }
 
@@ -339,6 +334,10 @@ export default {
     const origin = request.headers.get('origin');
     if (url.pathname.startsWith('/api/') && origin && !origin.startsWith('chrome-extension://') && origin !== url.origin) {
       return json({ error: 'Origen no permitido' }, 403);
+    }
+    // Tope de tamaño: una petición enorme no debe gastar CPU ni cupo (la captura más grande permitida ronda los 8 MB)
+    if (request.method === 'POST' && Number(request.headers.get('content-length') ?? 0) > 9_000_000) {
+      return json({ error: 'La petición es demasiado grande.' }, 413);
     }
     if (url.pathname === '/api/status' && request.method === 'GET') {
       return json({ ok: true, web: !!env.GEEKFLARE_KEY, composio: !!composioKey(env) });

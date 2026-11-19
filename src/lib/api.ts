@@ -1,3 +1,5 @@
+import { isBlockedHost } from './blocked';
+
 // URL del Worker de Hanzo en Cloudflare. Se puede sobreescribir con VITE_API_URL al compilar.
 const DEFAULT_API = 'https://extension.kairosautomation-ia.workers.dev';
 const BASE = (((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API)).replace(/\/$/, '');
@@ -67,6 +69,11 @@ export async function readPageContext(): Promise<PageContext | undefined> {
     if (typeof chrome === 'undefined' || !chrome.tabs?.query || !chrome.scripting?.executeScript) return undefined;
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) return undefined;
+    // Banca y pagos: el contenido de la página no se lee ni se envía; el modelo solo recibe este aviso
+    const host = new URL(tab.url).hostname;
+    if (isBlockedHost(host)) {
+      return { title: '', url: host, text: 'Por seguridad, Hanzo no lee el contenido de páginas de banca y pagos. Si necesitas ayuda con esta página, copia aquí el texto que quieras comentar.' };
+    }
     const [res] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => (document.body?.innerText ?? '').replace(/\n{3,}/g, '\n\n').slice(0, 16000),

@@ -49,10 +49,8 @@ export function splitCommand(t: string): { head: string; cmd: string; rest: stri
   return m ? { head: m[1], cmd: m[2], rest: m[3] } : null;
 }
 
-/** Sitios donde Hanzo nunca actúa (banca y pagos). */
-export function isBlockedHost(host: string): boolean {
-  return /(bank|banco|paypal|stripe|binance|coinbase|wise\.com|pichincha|produbanco|bolivariano|payphone|datafast|kushki|(^|\.)pay\.|checkout)/i.test(host);
-}
+/** Sitios donde Hanzo nunca actúa (banca y pagos); la lista vive en `blocked.ts` para compartirla con `api.ts`. */
+export { isBlockedHost } from './blocked';
 
 export function describeAction(a: ActAction, el?: PageEl): string {
   const name = el ? `«${el.label || el.kind}»` : 'un elemento';
