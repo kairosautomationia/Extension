@@ -236,9 +236,9 @@ const AgentBlock = memo(function AgentBlock({
             </button>
             <DownloadMenu answer={msg.answer ?? ''} className={action} />
             {!!msg.plan && !msg.replay && !msg.plan.steps.every((s) => s.state === 'skipped') && (
-              <button onClick={() => setSaved(true)} disabled={saved} className={action}>
+              <button onClick={() => setSaved(true)} disabled={saved} className={action} title="Guardar como atajo">
                 {saved ? <Check size={13} className="text-accent-ink" /> : <BookmarkPlus size={13} />}
-                {saved ? 'Atajo guardado' : 'Guardar como atajo'}
+                {saved ? 'Atajo guardado' : 'Atajo'}
               </button>
             )}
           </div>
