@@ -285,9 +285,8 @@ export function injectedSnapshot(): Snapshot {
 export function injectedReadView(max: number): string {
   const vh = window.innerHeight;
   const vw = window.innerWidth;
-  const out: string[] = [];
+  let out: string[] = [];
   let len = 0;
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const range = document.createRange();
   const okCache = new Map<Element, boolean>();
   const visible = (el: Element | null): boolean => {
@@ -303,6 +302,11 @@ export function injectedReadView(max: number): string {
     okCache.set(el, ok);
     return ok;
   };
+  // Se lee primero el contenido principal (<main>): deja fuera menús laterales, anuncios y sugerencias
+  const collect = (root: Element) => {
+  out = [];
+  len = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let prevBlock: Element | null = null;
   for (let n = walker.nextNode(); n && len < max; n = walker.nextNode()) {
     const t = (n.nodeValue || '').replace(/\s+/g, ' ').trim();
@@ -318,6 +322,10 @@ export function injectedReadView(max: number): string {
     prevBlock = block;
     len += t.length + 1;
   }
+  };
+  const main = document.querySelector('main, [role="main"]');
+  if (main) collect(main);
+  if (!main || len < 120) collect(document.body);
   // Líneas repetidas (menús, contadores) solo una vez
   const seen = new Set<string>();
   return out

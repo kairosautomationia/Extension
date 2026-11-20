@@ -208,15 +208,19 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             if (cur) await inTab(tabId, injectedHighlight, [null, '']).catch(() => undefined);
             check();
             // Sin página web (pestaña nueva): no hay elementos y lo único posible es abrir una dirección
-            const snap = cur ? await inTab(tabId, injectedSnapshot, []) : { els: [], scrollY: 0, scrollMax: 0 };
+            // Elementos y texto visible se leen a la vez (en lectura), para no sumar esperas
+            const [snap, view] = cur
+              ? await Promise.all([
+                  inTab(tabId, injectedSnapshot, []),
+                  reading ? inTab(tabId, injectedReadView, [3000]).catch(() => '') : Promise.resolve(''),
+                ])
+              : [{ els: [], scrollY: 0, scrollMax: 0 }, ''];
             check();
             if (!snap) {
               final = 'No pude leer la página.';
               break;
             }
 
-            const view = reading && cur ? ((await inTab(tabId, injectedReadView, [3000]).catch(() => '')) ?? '') : '';
-            check();
 
             const ctrl = new AbortController();
             abortRef.current = ctrl;
@@ -229,7 +233,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
                   elements: snap.els,
                   history,
                   scroll: { y: snap.scrollY, max: snap.scrollMax },
-                  ...(reading ? { read: true, view, notes } : {}),
+                  ...(reading ? { read: true, view: view ?? '', notes } : {}),
                 },
                 ctrl.signal,
               );
@@ -243,7 +247,10 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
 
             const a = plan.action;
             const note = reading ? (plan.notes ?? '').trim() : '';
-            if (note && notes.join('').length < 6000) {
+            // Nota nueva solo si aporta: no se repite lo ya anotado
+            const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, ' ').trim();
+            const dup = note && notes.some((x) => norm(x).includes(norm(note)) || norm(note) === norm(x));
+            if (note && !dup && notes.join('').length < 6000) {
               notes.push(note.slice(0, 500));
               addStep('leer', `Analizó la vista: ${note.length > 70 ? note.slice(0, 70) + '…' : note}`, 'done');
             }
@@ -383,7 +390,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
                 break;
               }
             } else {
-              await sleep(600); // el usuario alcanza a ver qué se va a tocar
+              await sleep(reading && a.type === 'scroll' ? 150 : 600); // el usuario alcanza a ver qué se va a tocar
             }
 
             const res = await inTab(tabId, injectedAct, [a]);
@@ -401,7 +408,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               summarize = true;
               break;
             }
-            await sleep(900); // deja que la página reaccione
+            await sleep(reading && a.type === 'scroll' ? 500 : 900); // deja que la página reaccione (y cargue lo nuevo al bajar)
           }
           if (final.startsWith('Llegué al tope')) summarize = true;
         } finally {
