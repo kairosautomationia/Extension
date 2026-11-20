@@ -19,6 +19,8 @@ import {
   isBlockedHost,
   parseTask,
   requestAct,
+  wantsRead,
+  injectedReadView,
   tabState,
 } from '../lib/actions';
 
@@ -158,6 +160,11 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         let final = `Llegué al tope de ${MAX_STEPS} pasos y me detuve por seguridad. Revisa cómo quedó la página; si falta algo, pídemelo de nuevo desde ahí.`;
         let bad = 0;
         const recent: string[] = []; // últimas acciones, para detectar que se quedó dando vueltas
+        // Tareas de lectura (resumir, analizar…): en cada vista se le pasa el texto visible y se acumulan sus notas
+        const reading = wantsRead(task);
+        const notes: string[] = [];
+        let scrolls = 0;
+        let finished = false;
         try {
           for (let n = 0; n < MAX_STEPS; n++) {
             check();
@@ -204,6 +211,9 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               break;
             }
 
+            const view = reading && cur ? ((await inTab(tabId, injectedReadView, [3000]).catch(() => '')) ?? '') : '';
+            check();
+
             const ctrl = new AbortController();
             abortRef.current = ctrl;
             let plan: ActPlan | null = null;
@@ -215,6 +225,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
                   elements: snap.els,
                   history,
                   scroll: { y: snap.scrollY, max: snap.scrollMax },
+                  ...(reading ? { read: true, view, notes } : {}),
                 },
                 ctrl.signal,
               );
@@ -227,8 +238,14 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             if (!plan) break;
 
             const a = plan.action;
+            const note = reading ? (plan.notes ?? '').trim() : '';
+            if (note && notes.join('').length < 6000) {
+              notes.push(note.slice(0, 500));
+              addStep('leer', `Analizó la vista: ${note.length > 70 ? note.slice(0, 70) + '…' : note}`, 'done');
+            }
             if (a.type === 'done' || a.type === 'ask') {
               final = plan.say || (a.type === 'done' ? 'Listo.' : 'Necesito más datos.');
+              finished = true;
               break;
             }
             if (a.type === 'open') {
@@ -305,6 +322,25 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
               }
               continue;
             }
+            if (a.type === 'scroll') {
+              // Según la posición real: si ya no hay más que ver, no se desplaza y se le pide cerrar con lo que tiene
+              const up = a.dir === 'up';
+              const atEdge = up ? snap.scrollY <= 2 : snap.scrollY >= snap.scrollMax - 2;
+              scrolls++;
+              const tooMany = reading && scrolls > 12;
+              if (atEdge || tooMany) {
+                history.push(
+                  tooMany
+                    ? 'Ya recorriste suficientes secciones. Responde done con el resultado a partir de tus notas.'
+                    : `Ya estás ${up ? 'al inicio' : 'al final'} de la página: no hay más para ${up ? 'subir' : 'bajar'}. Usa lo que ya viste o responde done.`,
+                );
+                if (++bad >= 3) {
+                  final = 'No hay más contenido que ver en la página.';
+                  break;
+                }
+                continue;
+              }
+            }
             const desc = describeAction(a, el);
             if (el && el.risk === 'blocked') {
               addStep(`${a.type}(#${el.id})`, `Bloqueado: ${desc}`, 'skipped');
@@ -348,10 +384,12 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             setStep(si, res?.ok ? 'done' : 'skipped');
             history.push(`${desc} → ${res?.ok ? 'OK' : `FALLÓ: ${res?.msg ?? 'sin respuesta'}`}`);
             // Misma acción una y otra vez sin avanzar: se detiene (desplazarse puede repetirse más en páginas largas)
-            recent.push(desc);
-            const limit = a.type === 'scroll' ? 6 : 3;
+            // Al desplazarse, la posición cuenta: bajar y avanzar no es repetir
+            const key = a.type === 'scroll' ? `${desc}@${snap.scrollY}` : desc;
+            recent.push(key);
+            const limit = a.type === 'scroll' ? 4 : 3;
             const tail = recent.slice(-limit);
-            if (tail.length === limit && tail.every((d) => d === desc)) {
+            if (tail.length === limit && tail.every((d) => d === key)) {
               final = `Me quedé repitiendo «${desc}» sin avanzar, así que me detuve. Revisa la página o dame un detalle más de lo que buscas.`;
               break;
             }
@@ -360,6 +398,8 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         } finally {
           inTab(tabId, injectedClear, []).catch(() => {});
         }
+        // Si la tarea de lectura se cortó antes de dar su resumen, al menos se entrega lo que alcanzó a leer
+        if (reading && !finished && notes.length) final += `\n\n**Lo que alcancé a leer:**\n${notes.map((n) => `- ${n}`).join('\n')}`;
         finishTask(final);
       };
 

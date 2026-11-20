@@ -31,6 +31,13 @@ export interface ActAction {
 export interface ActPlan {
   say: string;
   action: ActAction;
+  /** Lo nuevo e importante que el modelo leyó en esta vista (solo en tareas de lectura). */
+  notes?: string;
+}
+
+/** ¿La tarea pide información de la página (resumir, leer, analizar…) y no solo hacer clics? */
+export function wantsRead(task: string): boolean {
+  return /(resum|\blee\b|\bleer\b|lectura|analiz|extra[eé]|extraer|\bdime\b|cu[eé]ntame|qu[eé] (dice|hay|trae|es|ofrece)|explica|revisa|compar|cu[aá]nt[oa]s?|lista(r)? |informaci[oó]n|datos |perfil|describe|encuentra|busca (en|dentro)|\bresumen\b)/i.test(task);
 }
 
 /** Pasos seguidos antes de preguntar si sigue; tope absoluto por tarea. */
@@ -104,6 +111,10 @@ export async function requestAct(
     elements: PageEl[];
     history: string[];
     scroll: { y: number; max: number };
+    /** Tarea de lectura: el modelo recibe el texto visible y las notas acumuladas. */
+    read?: boolean;
+    view?: string;
+    notes?: string[];
   },
   signal?: AbortSignal,
 ): Promise<ActPlan> {
@@ -117,7 +128,7 @@ export async function requestAct(
     });
     const data = (await res.json().catch(() => ({}))) as Partial<ActPlan> & { error?: string };
     if (!res.ok || !data.action) throw new Error(data.error ?? `Error ${res.status}`);
-    return { say: String(data.say ?? ''), action: data.action };
+    return { say: String(data.say ?? ''), action: data.action, notes: typeof data.notes === 'string' ? data.notes : undefined };
   } catch (e) {
     if (t.timedOut()) throw new Error(TIMEOUT_MSG);
     throw e;
@@ -232,11 +243,75 @@ export function injectedSnapshot(): Snapshot {
     els.push(item);
   }
 
-  return {
-    els,
-    scrollY: Math.round(window.scrollY),
-    scrollMax: Math.max(0, Math.round(document.documentElement.scrollHeight - window.innerHeight)),
+  // Posición de lectura: la ventana o, si la página scrollea dentro de un panel (apps tipo Gmail/LinkedIn), ese panel
+  const root = document.scrollingElement || document.documentElement;
+  let sy = Math.round(window.scrollY);
+  let smax = Math.max(0, Math.round(root.scrollHeight - window.innerHeight));
+  if (smax <= 8) {
+    let best: HTMLElement | null = null;
+    let bs = 0;
+    document.querySelectorAll<HTMLElement>('main,div,section,ul,[role="main"],[role="feed"]').forEach((e) => {
+      const s = e.scrollHeight - e.clientHeight;
+      if (s < 80 || e.clientHeight < 200 || s <= bs || e.closest('[data-hanzo-overlay]')) return;
+      const oy = getComputedStyle(e).overflowY;
+      if (oy !== 'auto' && oy !== 'scroll') return;
+      const r = e.getBoundingClientRect();
+      if (r.bottom <= 0 || r.top >= vh) return;
+      best = e;
+      bs = s;
+    });
+    if (best) {
+      const b = best as HTMLElement;
+      sy = Math.round(b.scrollTop);
+      smax = Math.max(0, Math.round(b.scrollHeight - b.clientHeight));
+    }
+  }
+  return { els, scrollY: sy, scrollMax: smax };
+}
+
+/** Texto que se ve ahora en pantalla (solo lectura): sirve para que el modelo analice lo que va viendo al desplazarse. */
+export function injectedReadView(max: number): string {
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const out: string[] = [];
+  let len = 0;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  const okCache = new Map<Element, boolean>();
+  const visible = (el: Element | null): boolean => {
+    if (!el) return false;
+    const c = okCache.get(el);
+    if (c !== undefined) return c;
+    let ok = true;
+    if (/^(SCRIPT|STYLE|NOSCRIPT|SVG|TEMPLATE|INPUT|TEXTAREA|SELECT)$/i.test(el.tagName) || el.closest('[data-hanzo-overlay]')) ok = false;
+    else {
+      const cs = getComputedStyle(el);
+      ok = cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
+    }
+    okCache.set(el, ok);
+    return ok;
   };
+  let prevBlock: Element | null = null;
+  for (let n = walker.nextNode(); n && len < max; n = walker.nextNode()) {
+    const t = (n.nodeValue || '').replace(/\s+/g, ' ').trim();
+    if (t.length < 2) continue;
+    const el = n.parentElement;
+    if (!visible(el)) continue;
+    range.selectNodeContents(n);
+    const r = range.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2 || r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) continue;
+    const block = el && (el.closest('p,li,h1,h2,h3,h4,h5,h6,tr,section,article,div') || el);
+    if (out.length && block === prevBlock) out[out.length - 1] += ' ' + t;
+    else out.push(t);
+    prevBlock = block;
+    len += t.length + 1;
+  }
+  // Líneas repetidas (menús, contadores) solo una vez
+  const seen = new Set<string>();
+  return out
+    .filter((l) => (seen.has(l) ? false : (seen.add(l), true)))
+    .join('\n')
+    .slice(0, max);
 }
 
 type HzUi = { root: HTMLElement; cursor: HTMLElement; x: number; y: number; ttl?: ReturnType<typeof setTimeout> };
@@ -411,7 +486,27 @@ export function injectedAct(a: ActAction): { ok: boolean; msg: string } {
   }
 
   if (a.type === 'scroll') {
-    window.scrollBy(0, (a.dir === 'up' ? -1 : 1) * Math.round(window.innerHeight * 0.8));
+    const dy = (a.dir === 'up' ? -1 : 1) * Math.round(window.innerHeight * 0.8);
+    const root = document.scrollingElement || document.documentElement;
+    if (root.scrollHeight - window.innerHeight > 8) {
+      window.scrollBy(0, dy);
+    } else {
+      // La página scrollea dentro de un panel: se desplaza el panel más largo que se ve
+      let best: HTMLElement | null = null;
+      let bs = 0;
+      document.querySelectorAll<HTMLElement>('main,div,section,ul,[role="main"],[role="feed"]').forEach((e) => {
+        const s = e.scrollHeight - e.clientHeight;
+        if (s < 80 || e.clientHeight < 200 || s <= bs || e.closest('[data-hanzo-overlay]')) return;
+        const oy = getComputedStyle(e).overflowY;
+        if (oy !== 'auto' && oy !== 'scroll') return;
+        const r = e.getBoundingClientRect();
+        if (r.bottom <= 0 || r.top >= window.innerHeight) return;
+        best = e;
+        bs = s;
+      });
+      if (best) (best as HTMLElement).scrollBy(0, dy);
+      else window.scrollBy(0, dy);
+    }
     return { ok: true, msg: 'Desplazado' };
   }
 
