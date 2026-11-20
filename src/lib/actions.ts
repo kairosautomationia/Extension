@@ -325,7 +325,7 @@ export function injectedReadView(max: number): string {
   };
   const main = document.querySelector('main, [role="main"]');
   if (main) collect(main);
-  if (!main || len < 120) collect(document.body);
+  if (!main || len < 40) collect(document.body);
   // Líneas repetidas (menús, contadores) solo una vez
   const seen = new Set<string>();
   return out
