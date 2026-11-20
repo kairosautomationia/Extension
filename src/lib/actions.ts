@@ -40,6 +40,12 @@ export function wantsRead(task: string): boolean {
   return /(resum|\blee\b|\bleer\b|lectura|analiz|extra[eé]|extraer|\bdime\b|cu[eé]ntame|qu[eé] (dice|hay|trae|es|ofrece)|explica|revisa|compar|cu[aá]nt[oa]s?|lista(r)? |informaci[oó]n|datos |perfil|describe|encuentra|busca (en|dentro)|\bresumen\b)/i.test(task);
 }
 
+/** Mismo sitio (ignora subdominios: linkedin.com y www.linkedin.com cuentan igual). */
+export function sameSite(a: string, b: string): boolean {
+  const base = (h: string) => h.toLowerCase().replace(/^www\./, '').split('.').slice(-2).join('.');
+  return a === b || base(a) === base(b);
+}
+
 /** Pasos seguidos antes de preguntar si sigue; tope absoluto por tarea. */
 export const STEP_BLOCK = 20;
 export const MAX_STEPS = 60;
@@ -115,6 +121,8 @@ export async function requestAct(
     read?: boolean;
     view?: string;
     notes?: string[];
+    /** Cierre de una tarea de lectura: el Worker redacta la respuesta final con las notas. */
+    finalize?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<ActPlan> {

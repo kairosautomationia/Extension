@@ -20,6 +20,7 @@ import {
   parseTask,
   requestAct,
   wantsRead,
+  sameSite,
   injectedReadView,
   tabState,
 } from '../lib/actions';
@@ -165,6 +166,8 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
         const notes: string[] = [];
         let scrolls = 0;
         let finished = false;
+        let summarize = false; // al cerrar una lectura, el Worker redacta la respuesta final con las notas
+        let lastPage = { title: '', url: '' };
         try {
           for (let n = 0; n < MAX_STEPS; n++) {
             check();
@@ -191,11 +194,12 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             }
             const cur = await tabState(tabId);
             check();
-            if (cur && baseHost && cur.host !== baseHost) {
+            if (cur && baseHost && !sameSite(cur.host, baseHost)) {
               final = `La pestaña cambió a **${cur.host}**. Por seguridad me detuve; vuelve a pedirme la tarea desde ahí.`;
               break;
             }
             if (cur && !baseHost) baseHost = cur.host;
+            if (cur) lastPage = { title: cur.title ?? '', url: cur.url ?? '' };
             if (!cur && baseHost) {
               final = 'La pestaña ya no es una página web; me detuve.';
               break;
@@ -246,6 +250,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             if (a.type === 'done' || a.type === 'ask') {
               final = plan.say || (a.type === 'done' ? 'Listo.' : 'Necesito más datos.');
               finished = true;
+              summarize = a.type === 'done';
               break;
             }
             if (a.type === 'open') {
@@ -336,6 +341,7 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
                 );
                 if (++bad >= 3) {
                   final = 'No hay más contenido que ver en la página.';
+                  summarize = true;
                   break;
                 }
                 continue;
@@ -356,7 +362,8 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             const code = a.type === 'scroll' ? `scroll("${a.dir ?? 'down'}")` : `${a.type}(#${a.id})`;
             const si = addStep(code, desc.charAt(0).toUpperCase() + desc.slice(1), 'running');
             const high = el?.risk === 'high';
-            const needsApproval = getMode() === 'manual' || high;
+            // Desplazarse para leer no cambia nada en la página: no pide aprobación ni en Manual
+            const needsApproval = (getMode() === 'manual' && !(reading && a.type === 'scroll')) || high;
 
             await inTab(tabId, injectedHighlight, [el ? el.id : null, desc]);
             if (needsApproval) {
@@ -391,15 +398,38 @@ export function useAgent(mode: PermissionMode, opts: { onCapture?: () => void; o
             const tail = recent.slice(-limit);
             if (tail.length === limit && tail.every((d) => d === key)) {
               final = `Me quedé repitiendo «${desc}» sin avanzar, así que me detuve. Revisa la página o dame un detalle más de lo que buscas.`;
+              summarize = true;
               break;
             }
             await sleep(900); // deja que la página reaccione
           }
+          if (final.startsWith('Llegué al tope')) summarize = true;
         } finally {
           inTab(tabId, injectedClear, []).catch(() => {});
         }
-        // Si la tarea de lectura se cortó antes de dar su resumen, al menos se entrega lo que alcanzó a leer
-        if (reading && !finished && notes.length) final += `\n\n**Lo que alcancé a leer:**\n${notes.map((n) => `- ${n}`).join('\n')}`;
+        if (reading && notes.length) {
+          let written = '';
+          if (summarize) {
+            // La respuesta final se redacta aparte, con todas las notas: no depende de lo que el modelo puso en "say"
+            const si = addStep('resumir', 'Redactando la respuesta con lo que leyó', 'running');
+            check();
+            try {
+              const ctrl = new AbortController();
+              abortRef.current = ctrl;
+              const r = await requestAct(
+                { task, page: lastPage, elements: [], history: [], scroll: { y: 0, max: 0 }, read: true, finalize: true, notes },
+                ctrl.signal,
+              );
+              written = (r.say || '').trim();
+            } catch {
+              written = '';
+            }
+            setStep(si, written ? 'done' : 'skipped');
+          }
+          if (written) final = finished ? written : `${written}\n\n_${final}_`;
+          // Si no se pudo redactar, al menos se entrega lo que alcanzó a leer
+          else final += `\n\n**Lo que alcancé a leer:**\n${notes.map((x) => `- ${x}`).join('\n')}`;
+        }
         finishTask(final);
       };
 
