@@ -42,7 +42,11 @@ export function wantsRead(task: string): boolean {
 
 /** Mismo sitio (ignora subdominios: linkedin.com y www.linkedin.com cuentan igual). */
 export function sameSite(a: string, b: string): boolean {
-  const base = (h: string) => h.toLowerCase().replace(/^www\./, '').split('.').slice(-2).join('.');
+  // Dominios como empresa.com.ec o sitio.gob.ec usan tres partes
+  const base = (h: string) => {
+    const p = h.toLowerCase().replace(/^www\./, '').split('.');
+    return p.slice(p.length > 2 && /^(com|gob|gov|edu|org|net|co|ac|mil)$/.test(p[p.length - 2]) ? -3 : -2).join('.');
+  };
   return a === b || base(a) === base(b);
 }
 
